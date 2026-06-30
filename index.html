@@ -307,7 +307,12 @@
     <!-- ========== 设置弹窗 ========== -->
     <div class="modal-overlay" id="settings-modal" style="display:none">
       <div class="modal-content">
-        <h4 class="modal-title">⚙️ 个人设置</h4>
+        <div class="modal-header">
+          <h4 class="modal-title">⚙️ 个人设置</h4>
+          <button class="modal-close" id="btn-settings-close" title="关闭">✕</button>
+        </div>
+
+        <div class="modal-body">
 
         <!-- 体重目标 -->
         <div class="settings-group">
@@ -456,6 +461,7 @@
           </div>
           <button class="btn btn--danger-outline" id="btn-logout">退出登录</button>
         </div>
+      </div><!-- .modal-body -->
       </div>
     </div>
 

@@ -202,6 +202,14 @@ function openSettingsModal() {
   // API Key 事件
   bindApiKeyEvents();
 
+  // 关闭按钮
+  const btnClose = $('btn-settings-close');
+  if (btnClose) {
+    const newClose = btnClose.cloneNode(true);
+    btnClose.parentNode.replaceChild(newClose, btnClose);
+    newClose.addEventListener('click', closeSettingsModal);
+  }
+
   $('settings-modal').style.display = 'flex';
 }
 
