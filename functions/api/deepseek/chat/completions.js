@@ -47,7 +47,7 @@ export async function onRequest(context) {
 
     // 密钥优先级：
     //   1. 前端传的 Authorization header（用户自己的 Key）
-    //   2. Cloudflare Pages Secret（env.DEEPSEEK_API_KEY）
+    //   2. Cloudflare Pages Secret — context.env.DEEPSEEK_API_KEY
     //   3. 都没有 → 返回错误
     const authHeader = request.headers.get('Authorization');
     let apiKey = '';
@@ -56,6 +56,7 @@ export async function onRequest(context) {
       apiKey = authHeader.replace('Bearer ', '');
     }
 
+    // Cloudflare Pages: secrets 通过 context.env 或直接作为 env 绑定传入
     if (!apiKey && env && env.DEEPSEEK_API_KEY) {
       apiKey = env.DEEPSEEK_API_KEY;
     }
