@@ -1,0 +1,13 @@
+# 热量计算器 — Cloudflare Pages 配置
+# 部署命令: npx wrangler pages deploy . --branch main
+
+name = "calorie-calculator"
+compatibility_date = "2025-06-30"
+pages_build_output_dir = "."
+
+# Pages Functions 目录（默认 functions/，无需额外配置）
+# 静态资源为当前目录下所有 HTML/CSS/JS 文件
+
+[env.production]
+# 生产环境密钥通过 Cloudflare Dashboard 或 wrangler secret 管理
+# 部署后运行: npx wrangler secret put DEEPSEEK_API_KEY --env production

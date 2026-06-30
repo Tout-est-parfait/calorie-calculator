@@ -13,3 +13,13 @@ Desktop.ini
 # 临时文件
 *.tmp
 *.log
+
+# 密钥与环境变量（不要提交真实密钥！）
+.env
+.env.*
+*.pem
+*.key
+secrets/
+
+# Cloudflare
+.wrangler/

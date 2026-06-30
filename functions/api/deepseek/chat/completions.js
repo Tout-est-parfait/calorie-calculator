@@ -4,14 +4,19 @@
  *
  * 自动使用内置默认密钥转发请求到 DeepSeek API。
  * 如前端传了 Authorization header（用户自有 Key），优先使用用户 Key。
+ *
+ * 密钥配置方式（三选一，按优先级排序）：
+ *   1. 用户自带 Key — 前端设置页输入，通过 Authorization header 传递
+ *   2. Cloudflare Pages Secret — 运行 `npx wrangler secret put DEEPSEEK_API_KEY` 注入
+ *   3. 环境变量 — 本地开发时设置 DEEPSEEK_API_KEY 环境变量
+ *
+ * 注意：本文件不包含任何真实 API Key，请通过上述方式配置。
  */
 
-// 默认 DeepSeek API Key（服务端持有，浏览器不可见）
-const DEFAULT_API_KEY = 'YOUR_DEEPSEEK_API_KEY';
 const UPSTREAM_URL = 'https://api.deepseek.com/v1/chat/completions';
 
 export async function onRequest(context) {
-  const { request } = context;
+  const { request, env } = context;
 
   // 处理 CORS 预检请求
   if (request.method === 'OPTIONS') {
@@ -40,9 +45,37 @@ export async function onRequest(context) {
     // 读取前端请求体
     const body = await request.text();
 
-    // 如果前端传了 Authorization，使用用户的 Key；否则使用默认 Key
+    // 密钥优先级：
+    //   1. 前端传的 Authorization header（用户自己的 Key）
+    //   2. Cloudflare Pages Secret（env.DEEPSEEK_API_KEY）
+    //   3. 都没有 → 返回错误
     const authHeader = request.headers.get('Authorization');
-    const apiKey = authHeader ? authHeader.replace('Bearer ', '') : DEFAULT_API_KEY;
+    let apiKey = '';
+
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      apiKey = authHeader.replace('Bearer ', '');
+    }
+
+    if (!apiKey && env && env.DEEPSEEK_API_KEY) {
+      apiKey = env.DEEPSEEK_API_KEY;
+    }
+
+    if (!apiKey) {
+      return new Response(
+        JSON.stringify({
+          error: {
+            message: '未配置 API Key。请在设置页面输入您的 DeepSeek API Key，或由管理员配置服务端密钥。\n获取地址：https://platform.deepseek.com/api_keys',
+          },
+        }),
+        {
+          status: 401,
+          headers: {
+            'Content-Type': 'application/json',
+            'Access-Control-Allow-Origin': '*',
+          },
+        }
+      );
+    }
 
     const proxyRequest = new Request(UPSTREAM_URL, {
       method: 'POST',
