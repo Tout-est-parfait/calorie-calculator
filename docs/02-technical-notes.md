@@ -15,17 +15,24 @@
 热量计算器/
 ├── index.html              # 主页面（唯一页面，SPA 模式）
 ├── css/
-│   └── style.css           # 样式文件（~2000 行）
+│   └── style.css           # 样式文件（~2200 行）
 ├── js/
-│   ├── app.js              # 应用入口，初始化与协调
+│   ├── app.js              # 应用入口，初始化与协调（3Tab导航 + 视图切换）
 │   ├── food-database.js    # 内置食物数据库（173 种食物，8 个分类）
 │   ├── auth.js             # 用户认证（注册/登录/会话/数据隔离）
-│   ├── api.js              # DeepSeek API 集成（食物估计 + AI建议）
-│   ├── settings.js         # 用户设置（BMR + 热量目标 + API Key）
+│   ├── api.js              # DeepSeek API 集成（食物估计 + AI建议 + 每日食谱）
+│   ├── settings.js         # 用户设置（BMR + 热量目标 + API Key + 代理模式）
 │   ├── custom-food.js      # 自定义食物 CRUD
 │   ├── dashboard.js        # 仪表盘渲染（环形进度条 + 营养素卡片 + 供能比例条）
-│   ├── advisor.js          # 科学建议引擎（规则引擎 + AI深度分析）
+│   ├── advisor.js          # 科学建议引擎（规则引擎 + AI深度分析 + AI食谱计划）
 │   ├── history.js          # 历史记录管理（7 天统计 + 日期列表）
+├── functions/              # Cloudflare Pages Functions（服务端API代理）
+│   └── api/deepseek/chat/completions.js  # DeepSeek API 代理（内置默认密钥）
+├── proxy/                  # 代理配置参考文件（非 Cloudflare 部署用）
+│   ├── nginx.conf
+│   ├── cloudflare-worker.js
+│   ├── vercel.json
+│   └── README.md
 ├── docs/                   # 项目文档
 ├── development-logs/       # 开发日志
 └── CLAUDE.md               # 开发指引
@@ -118,11 +125,22 @@ targets = {
 
 - 使用 localStorage 存储所有用户数据
 - 键名规范：`cc_` 前缀（Calorie Calculator）
-  - `cc_records_YYYY-MM-DD` — 每日摄入记录（JSON 数组，每条为独立记录）
-  - `cc_settings` — 用户设置（Phase 7 实现）
-  - `cc_custom_foods` — 用户自定义食物（Phase 8 实现，JSON 数组）
+- 登录用户自动添加 `cc_{userId}_*` 前缀隔离数据
+
+| 键名格式 | 内容 | 说明 |
+|----------|------|------|
+| `cc_records_YYYY-MM-DD` | JSON 数组 | 每日摄入记录 |
+| `cc_settings` | JSON 对象 | 用户设置（目标/身体数据/热量） |
+| `cc_custom_foods` | JSON 数组 | 用户自定义食物 |
+| `cc_apikey_deepseek` | string | DeepSeek API Key（可选） |
+| `cc_proxy_mode` | boolean | 代理模式开关 |
+| `cc_proxy_path` | string | 代理路径 |
+| `cc_ai_advice_YYYY-MM-DD` | JSON 对象 | AI 深度分析结果（按日期缓存） |
+| `cc_mealplan_YYYY-MM-DD` | JSON 对象 | AI 每日食谱计划（按日期缓存） |
+
 - 历史模块通过扫描 `cc_records_*` 前缀的键来枚举所有有记录的日期
 - 历史统计只计算有记录的天数，无记录的日期不参与均值计算
+- AI 建议和食谱按日期缓存，切换日期自动加载对应缓存，避免重复消耗 API tokens
 
 ## 热量标准参考
 
@@ -208,13 +226,26 @@ targets = {
 - 使用 Web Crypto API `SHA-256` + 随机盐（`crypto.getRandomValues`）做哈希
 - 定位是「防止数据混乱」而非金融级安全
 
-## DeepSeek API 集成（Phase 11）
+## DeepSeek API 集成
 
-### 端点
+### 端点与模式
 
-- URL：`https://api.deepseek.com/v1/chat/completions`
-- 模型：`deepseek-chat`
-- API Key 存储：`cc_{userId}_apikey`（或 `cc_apikey` 匿名模式）
+- API 端点：`https://api.deepseek.com/v1/chat/completions`
+- 模型：`deepseek-chat`（可自定义）
+- 代理端点：`/api/deepseek/chat/completions`（同源路径）
+
+**两种工作模式：**
+
+| 模式 | 请求路径 | Authorization | 适用场景 |
+|------|----------|---------------|----------|
+| 代理模式 | 同源 `/api/deepseek/chat/completions` | 服务端附加默认密钥 | 零配置、安全（推荐） |
+| 直接模式 | `https://api.deepseek.com/v1/chat/completions` | 浏览器携带用户 Key | 用户使用自有 Key |
+
+**默认密钥安全设计：**
+- 密钥仅存储在服务端 `functions/api/deepseek/chat/completions.js`
+- 前端代码中不包含密钥的任何片段
+- `functions/proxy/[[path]].js` 拦截 `/proxy/*` 路径，防止配置文件泄漏
+- 代理模式下用户无需填写任何 API Key 即可使用所有 AI 功能
 
 ### AI 功能
 
@@ -222,11 +253,23 @@ targets = {
 |------|------|------|
 | 食物估计 | `estimateFood(description)` | 自然语言描述食物，返回营养估计JSON |
 | 智能建议 | `getAIAdvice(dailyData, userProfile)` | 发送当日数据，返回个性化建议 |
-| 连接测试 | `testApiConnection()` | 验证API Key有效性 |
+| 每日食谱 | `getDailyMealPlan(userProfile, dailyTarget)` | AI 规划全天饮食 + 训练计划 |
+| 连接测试 | `testApiConnection()` | 验证 API 连通性 |
+
+### 持久化缓存
+
+| 函数 | 存储键 | 说明 |
+|------|--------|------|
+| `saveAIAdvice(dateStr, data)` | `cc_ai_advice_YYYY-MM-DD` | 缓存 AI 建议 |
+| `loadAIAdvice(dateStr)` | 同上 | 读取缓存，无需重请求 |
+| `saveMealPlan(dateStr, data)` | `cc_mealplan_YYYY-MM-DD` | 缓存每日食谱 |
+| `loadMealPlan(dateStr)` | 同上 | 读取缓存 |
 
 ### 降级策略
 
-- API Key 未配置 → 提示用户配置
+- 代理模式 ON + 无用户 Key → 使用内置默认密钥（零配置）
+- 用户填写自有 Key → 优先使用用户 Key
+- API Key 未配置且非代理模式 → 提示用户启用代理或配置 Key
 - 网络异常 → 友好提示 + 规则引擎仍然可用
 - API 返回异常 → 显示错误，不影响规则建议
 

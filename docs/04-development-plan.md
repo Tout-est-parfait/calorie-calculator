@@ -170,6 +170,39 @@
 
 ---
 
+## Phase 12：AI 建议持久化 + 代理模式优化
+
+**目标**：AI 建议退出后不丢失，代理模式内置默认密钥实现零配置使用。
+
+**产出**：
+- `js/api.js`：新增 `saveAIAdvice()` / `loadAIAdvice()` 持久化函数
+- `js/advisor.js`：`renderAdvice()` 自动恢复已保存建议；`requestAIAdvice()` 成功后自动保存
+- 移除火山方舟 API 相关代码，简化为单一 DeepSeek 供应商
+- 代理配置文件填入默认密钥（Nginx / Cloudflare Worker / Vercel）
+- 设置 UI 显示「默认密钥」状态（代理模式 + 无用户 Key 时）
+- Cloudflare Pages Functions API 代理（`functions/api/deepseek/chat/completions.js`）
+- 安全措施：`functions/proxy/[[path]].js` 拦截 `/proxy/*` 访问
+
+**验证标准**：AI 分析后切换到其他 Tab 再回来，建议仍在；代理模式下无需填 Key 即可使用全部 AI 功能。
+
+---
+
+## Phase 13：AI 每日食谱计划 + 底部导航重构
+
+**目标**：新增 AI 每日食谱独立 Tab，底部导航升级为 3Tab，每个子界面增加返回按钮。
+
+**产出**：
+- `js/api.js`：新增 `getDailyMealPlan()` / `saveMealPlan()` / `loadMealPlan()`
+- `js/advisor.js`：新增 `renderMealPlan()` / `generateMealPlan()` / `renderMealPlanResultHTML()`
+- `index.html`：新增 AI 食谱面板 + 底部导航第三个 Tab + 顶部返回按钮
+- `js/app.js`：`switchTab()` 新增 `mealplan` 分支；新增 `showMealPlanView()`；返回按钮显隐逻辑
+- `css/style.css`：新增食谱卡片样式 + 返回按钮样式
+- 设置弹窗手机端适配：`modal-body` 滚动容器 + `modal-header` + `✕` 关闭按钮
+
+**验证标准**：底部 3 个 Tab 独立切换；食谱面板只在 AI食谱 Tab 显示；返回按钮在子界面可见、仪表盘隐藏；手机端设置弹窗可完整滚动查看。
+
+---
+
 ## 当前进度
 
 | Phase | 状态 | 完成日期 |
@@ -185,3 +218,5 @@
 | Phase 9 | ✅ 已完成 | 2026-06-29 |
 | Phase 10 | ✅ 已完成 | 2026-06-29 |
 | Phase 11 | ✅ 已完成 | 2026-06-29 |
+| Phase 12 | ✅ 已完成 | 2026-06-30 |
+| Phase 13 | ✅ 已完成 | 2026-06-30 |
