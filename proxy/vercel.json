@@ -1,0 +1,19 @@
+{
+  "rewrites": [
+    {
+      "source": "/api/deepseek/chat/completions",
+      "destination": "https://api.deepseek.com/v1/chat/completions"
+    }
+  ],
+  "headers": [
+    {
+      "source": "/api/(.*)",
+      "headers": [
+        {
+          "key": "Authorization",
+          "value": "Bearer YOUR_DEEPSEEK_API_KEY"
+        }
+      ]
+    }
+  ]
+}

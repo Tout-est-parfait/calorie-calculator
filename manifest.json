@@ -1,0 +1,19 @@
+{
+  "name": "热量计算器",
+  "short_name": "热量计算",
+  "description": "记录每日饮食，追踪热量与营养素摄入",
+  "start_url": ".",
+  "display": "standalone",
+  "orientation": "portrait",
+  "theme_color": "#4CAF50",
+  "background_color": "#FAFAFA",
+  "lang": "zh-CN",
+  "icons": [
+    {
+      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%234CAF50'/><text x='50' y='65' text-anchor='middle' font-size='50'>🥗</text></svg>",
+      "sizes": "100x100",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}
