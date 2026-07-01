@@ -22,7 +22,14 @@ const RECENT_DAYS = 7;
  * 扫描 localStorage，获取所有有记录的日期及其数据摘要
  * @returns {Array<{date: string, dateObj: Date, totalCal: number, count: number, records: Array}>}
  */
-function getAllDaySummaries() {
+async function getAllDaySummaries() {
+  // 优先尝试 D1 数据库
+  try {
+    const summaries = await getRecordSummariesDB();
+    if (summaries && summaries.length > 0) return summaries;
+  } catch (e) { /* fall back to localStorage */ }
+
+  // 回退到 localStorage
   const summaries = [];
 
   // 根据当前登录状态确定记录键前缀
@@ -68,9 +75,9 @@ function getAllDaySummaries() {
  * @param {number} days — 天数，默认 7
  * @returns {{ summaries: Array, stats: { avg, max, min, daysWithRecords } }}
  */
-function getRecentStats(days) {
+async function getRecentStats(days) {
   days = days || RECENT_DAYS;
-  const allSummaries = getAllDaySummaries();
+  const allSummaries = await getAllDaySummaries();
 
   // 生成最近 N 天的日期列表
   const today = new Date();
@@ -126,15 +133,15 @@ function getRecentStats(days) {
  * 渲染历史记录视图（统计卡片 + 日期列表）
  * 由 app.js 在切换到历史记录标签页时调用
  */
-function renderHistory() {
-  const allSummaries = getAllDaySummaries();
-  const { stats } = getRecentStats(RECENT_DAYS);
+async function renderHistory() {
+  const allSummaries = await getAllDaySummaries();
+  const { stats } = await getRecentStats(RECENT_DAYS);
 
   // 1. 更新统计卡片
   renderHistoryStats(stats);
 
   // 2. 渲染历史日期列表
-  renderHistoryList(allSummaries);
+  await renderHistoryList(allSummaries);
 }
 
 // ==================== 7 天统计卡片 ====================
@@ -148,7 +155,7 @@ function renderHistoryStats(stats) {
 
 // ==================== 历史日期列表 ====================
 
-function renderHistoryList(summaries) {
+async function renderHistoryList(summaries) {
   const listEl = $('history-list');
 
   if (summaries.length === 0) {
@@ -163,11 +170,11 @@ function renderHistoryList(summaries) {
 
   const today = new Date();
   today.setHours(0, 0, 0, 0);
+  const target = await getCalorieTarget(); // 从用户设置读取
 
   listEl.innerHTML = summaries.map(s => {
     const dayLabel = getDayLabel(s.dateObj, today);
     const weekDay = getWeekDay(s.dateObj);
-    const target = getCalorieTarget(); // 从用户设置读取
     const ratio = s.totalCal / target;
     const statusClass = getCalorieStatusClass(ratio);
     const statusText  = getCalorieStatusText(ratio);

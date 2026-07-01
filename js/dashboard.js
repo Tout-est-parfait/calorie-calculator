@@ -36,8 +36,8 @@ function getMacroTargets(calorieTarget) {
  * 渲染整个仪表盘
  * 由 app.js 在初始化、添加/删除食物、切换日期时调用
  */
-function renderDashboard() {
-  const records = getTodayRecords();
+async function renderDashboard() {
+  const records = await getTodayRecords();
 
   // 汇总计算
   const totalCal    = records.reduce((sum, r) => sum + r.calories, 0);
@@ -46,7 +46,7 @@ function renderDashboard() {
   const totalFat    = records.reduce((sum, r) => sum + r.fat,    0);
 
   // 读取热量目标（从用户设置，settings.js 提供）
-  const calorieTarget = getCalorieTarget();
+  const calorieTarget = await getCalorieTarget();
   const targets = getMacroTargets(calorieTarget);
 
   // 1. 环形进度条

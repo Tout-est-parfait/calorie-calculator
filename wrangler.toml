@@ -7,3 +7,9 @@ pages_build_output_dir = "."
 # Cloudflare Pages Secrets 通过命令行注入（可选，代码中已内置默认 Key）：
 #   npx wrangler pages secret put KIMI_API_KEY
 # 代码中通过 context.env.KIMI_API_KEY 访问
+
+# D1 数据库绑定 — Functions 中通过 context.env.DB 访问
+[[d1_databases]]
+binding = "DB"
+database_name = "calorie-calculator"
+database_id = "19431fc1-764d-4830-8fef-5c880693e745"

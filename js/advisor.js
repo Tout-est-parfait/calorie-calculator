@@ -93,8 +93,8 @@ const THRESHOLD = {
  * 渲染今日科学建议卡片
  * 由 app.js 在初始化、添加/删除食物、切换日期时调用
  */
-function renderAdvice() {
-  const records = getTodayRecords();
+async function renderAdvice() {
+  const records = await getTodayRecords();
   const container = $('advice-cards');
 
   // 无记录 → 空状态
@@ -116,7 +116,7 @@ function renderAdvice() {
   const totalProtein = records.reduce((sum, r) => sum + r.protein, 0);
   const totalFat    = records.reduce((sum, r) => sum + r.fat,    0);
 
-  const calorieTarget = getCalorieTarget(); // 从用户设置读取
+  const calorieTarget = await getCalorieTarget(); // 从用户设置读取
   const calRatio = totalCal / calorieTarget;
 
   // 各营养素供能比
@@ -177,7 +177,7 @@ function renderAdvice() {
   if (records.length > 0) {
     // 检查是否有已保存的 AI 建议
     const dateStr = formatDate(state.currentDate);
-    const savedAdvice = loadAIAdvice(dateStr);
+    const savedAdvice = await loadAIAdvice(dateStr);
     const hasSaved = savedAdvice && savedAdvice.summary;
 
     container.innerHTML += `
@@ -421,7 +421,7 @@ async function requestAIAdvice(records, totalCal, totalCarbs, totalProtein, tota
   };
 
   // 获取用户身体数据
-  const userSettings = getUserSettings();
+  const userSettings = await getUserSettings();
   const userProfile = {
     goal: userSettings.goal,
     gender: userSettings.gender,
@@ -507,9 +507,9 @@ function renderAIAdviceResultHTML(container, data) {
  * 渲染每日食谱面板
  * 初始化时调用，尝试从 localStorage 恢复当日食谱
  */
-function renderMealPlan() {
+async function renderMealPlan() {
   const dateStr = formatDate(state.currentDate);
-  const savedPlan = loadMealPlan(dateStr);
+  const savedPlan = await loadMealPlan(dateStr);
   const emptyEl = $('mealplan-empty');
   const resultEl = $('mealplan-result');
 
@@ -563,7 +563,7 @@ async function generateMealPlan() {
   btn.textContent = '⏳ 生成中...';
 
   // 获取用户数据和今日目标
-  const userSettings = getUserSettings();
+  const userSettings = await getUserSettings();
   const userProfile = {
     goal: userSettings.goal,
     gender: userSettings.gender,
@@ -571,7 +571,7 @@ async function generateMealPlan() {
     weight: userSettings.weight,
     height: userSettings.height,
   };
-  const dailyTarget = getCalorieTarget();
+  const dailyTarget = await getCalorieTarget();
 
   const result = await getDailyMealPlan(userProfile, dailyTarget);
 

@@ -195,14 +195,30 @@ async function registerUser(username, password) {
   users.push(user);
   saveUsers(users);
 
-  // 自动登录
+  // 自动登录（本地会话）
   saveSession({ userId: user.userId, username: user.username });
+
+  // 尝试远程注册（D1 数据库同步）
+  try {
+    const remoteResult = await registerRemote(
+      trimmedName, user.passwordHash, user.salt, user.userId
+    );
+    if (remoteResult.success) {
+      console.log('远程注册成功，数据将跨设备同步');
+    } else {
+      console.warn('远程注册失败（可离线使用）:', remoteResult.error);
+    }
+  } catch (e) {
+    console.warn('远程注册不可用（可离线使用）:', e.message);
+  }
 
   return { success: true };
 }
 
 /**
  * 用户登录
+ * 优先尝试远程登录（D1），支持跨设备登录
+ * 如果本地有用户数据，也支持离线密码验证
  * @param {string} username
  * @param {string} password
  * @returns {Promise<{success: boolean, error?: string}>}
@@ -214,39 +230,94 @@ async function loginUser(username, password) {
     return { success: false, error: '请输入用户名和密码' };
   }
 
-  const users = loadUsers();
-  const user = users.find(u => u.username === trimmedName);
+  let loggedIn = false;
+  let userId = '';
+  let fromRemote = false;
 
-  if (!user) {
-    return { success: false, error: '用户名不存在' };
-  }
-
-  // 验证密码
-  let isValid = false;
+  // 第一步：尝试远程登录（D1 数据库）
+  // 优点：支持跨设备、密码哈希验证在服务端完成
   try {
-    const hash = await hashPassword(password, user.salt);
-    isValid = (hash === user.passwordHash);
+    const users = loadUsers();
+    const localUser = users.find(u => u.username === trimmedName);
+    if (localUser) {
+      // 本地有此用户，先做本地哈希验证再发给服务端
+      const hash = await hashPassword(password, localUser.salt);
+      const remoteResult = await loginRemote(trimmedName, hash);
+      if (remoteResult.success) {
+        loggedIn = true;
+        userId = remoteResult.userId;
+        fromRemote = true;
+      }
+    } else {
+      // 新设备：本地无此用户，尝试远程登录
+      // 用随机盐生成哈希（服务端会用自己的盐验证）
+      const tempSalt = generateSalt();
+      const tempHash = await hashPassword(password, tempSalt);
+      const remoteResult = await loginRemote(trimmedName, tempHash);
+      if (remoteResult.success) {
+        loggedIn = true;
+        userId = remoteResult.userId;
+        fromRemote = true;
+      } else {
+        return { success: false, error: '用户名不存在或密码错误' };
+      }
+    }
   } catch (e) {
-    // Web Crypto API 降级验证
-    const fallbackHash = btoa(password + user.salt);
-    isValid = (fallbackHash === user.passwordHash);
+    // 远程不可用，降级到本地验证
+    console.warn('远程登录不可用，使用本地验证:', e.message);
   }
 
-  if (!isValid) {
-    return { success: false, error: '密码错误' };
+  // 第二步：如果远程登录失败或不可用，尝试本地密码验证
+  if (!loggedIn) {
+    const users = loadUsers();
+    const user = users.find(u => u.username === trimmedName);
+
+    if (!user) {
+      return { success: false, error: '用户名不存在' };
+    }
+
+    let isValid = false;
+    try {
+      const hash = await hashPassword(password, user.salt);
+      isValid = (hash === user.passwordHash);
+    } catch (e) {
+      const fallbackHash = btoa(password + user.salt);
+      isValid = (fallbackHash === user.passwordHash);
+    }
+
+    if (!isValid) {
+      return { success: false, error: '密码错误' };
+    }
+
+    userId = user.userId;
+    loggedIn = true;
   }
 
-  // 保存会话
-  saveSession({ userId: user.userId, username: user.username });
+  // 保存本地会话
+  saveSession({ userId: userId, username: trimmedName });
+
+  // 如果远程登录成功，从 D1 拉取最新数据
+  if (fromRemote) {
+    try {
+      await syncFromServer();
+      console.log('已从云端同步数据');
+    } catch (e) {
+      console.warn('云端数据同步失败:', e.message);
+    }
+  }
 
   return { success: true };
 }
 
 /**
  * 退出登录
- * 清除会话，返回匿名模式
+ * 清除本地会话 + 远程会话
  */
-function logoutUser() {
+async function logoutUser() {
+  // 远程登出
+  try {
+    await logoutRemote();
+  } catch (e) { /* ignore */ }
   clearSession();
 }
 

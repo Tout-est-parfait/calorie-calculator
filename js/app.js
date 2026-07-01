@@ -15,12 +15,12 @@ const state = {
 };
 
 // ==================== 初始化 ====================
-function init() {
+async function init() {
   // 检查是否已登录（有有效会话）
   if (isLoggedIn()) {
     // 已有会话，直接进入
     hideAuthScreen();
-    initApp();
+    await initApp();
   } else {
     // 未登录，显示登录界面
     showAuthScreen();
@@ -28,7 +28,7 @@ function init() {
 }
 
 /** 初始化应用主体（认证之后调用） */
-function initApp() {
+async function initApp() {
   const user = getCurrentUser();
   console.log('热量计算器 v1.0 — Phase 10 多用户登录系统');
   console.log('当前日期:', formatDateStr(state.currentDate));
@@ -38,14 +38,16 @@ function initApp() {
     console.log('匿名模式');
   }
 
+  await initDB();
+
   updateDateDisplay();
-  renderIntakeList();
-  renderDashboard();
-  renderAdvice();
+  await renderIntakeList();
+  await renderDashboard();
+  await renderAdvice();
   bindEvents();
 
   // 首次使用引导：无记录时显示搜索提示
-  checkOnboarding();
+  await checkOnboarding();
 }
 
 // ==================== 认证界面控制 ====================
@@ -65,7 +67,7 @@ function hideAuthScreen() {
 /** 认证成功后进入应用 */
 async function onAuthSuccess() {
   hideAuthScreen();
-  initApp();
+  await initApp();
   // 显示欢迎提示
   const user = getCurrentUser();
   if (user) {
@@ -74,9 +76,9 @@ async function onAuthSuccess() {
 }
 
 /** 匿名跳过 */
-function onAuthSkip() {
+async function onAuthSkip() {
   hideAuthScreen();
-  initApp();
+  await initApp();
 }
 
 // ==================== 认证事件绑定 ====================
@@ -215,8 +217,8 @@ function showToast(message, type) {
 }
 
 /** 首次使用引导：当天无记录时提示搜索 */
-function checkOnboarding() {
-  const records = getTodayRecords();
+async function checkOnboarding() {
+  const records = await getTodayRecords();
   const tip = $('onboarding-tip');
   if (records.length === 0) {
     tip.style.display = 'flex';
@@ -275,13 +277,13 @@ function goNextDay() {
 }
 
 /** 日期切换后刷新列表、仪表盘、建议 */
-function refreshView() {
-  renderIntakeList();
-  renderDashboard();
-  renderAdvice();
+async function refreshView() {
+  await renderIntakeList();
+  await renderDashboard();
+  await renderAdvice();
   // 仅在 AI 食谱 Tab 激活时刷新食谱
   if (state.activeTab === 'mealplan') {
-    renderMealPlan();
+    await renderMealPlan();
   }
 }
 
@@ -321,7 +323,7 @@ function showDashboardView() {
 }
 
 /** 显示历史记录视图 */
-function showHistoryView() {
+async function showHistoryView() {
   $('dashboard').style.display = 'none';
   $('search-section').style.display = 'none';
   $('intake-section').style.display = 'none';
@@ -332,11 +334,11 @@ function showHistoryView() {
   $('btn-prev-day').style.display = 'none';
   $('btn-next-day').style.display = 'none';
   $('btn-back').style.display = '';
-  renderHistory();
+  await renderHistory();
 }
 
 /** 显示 AI 食谱视图 */
-function showMealPlanView() {
+async function showMealPlanView() {
   $('dashboard').style.display = 'none';
   $('search-section').style.display = 'none';
   $('intake-section').style.display = 'none';
@@ -347,11 +349,11 @@ function showMealPlanView() {
   $('btn-prev-day').style.display = 'none';
   $('btn-next-day').style.display = 'none';
   $('btn-back').style.display = '';
-  renderMealPlan();
+  await renderMealPlan();
 }
 
 // ==================== 搜索栏交互 ====================
-function onSearchInput(e) {
+async function onSearchInput(e) {
   const value = e.target.value.trim();
   state.searchQuery = value;
 
@@ -361,7 +363,7 @@ function onSearchInput(e) {
   if (value) {
     // 融合内置数据库 + 自定义食物
     const builtIn = searchFoods(value);
-    const custom = searchCustomFoods(value);
+    const custom = await searchCustomFoods(value);
     const results = [...builtIn, ...custom];
     renderSearchResults(results);
     $('search-results').style.display = 'block';
@@ -397,15 +399,15 @@ function renderSearchResults(results) {
 
   // 绑定自定义食物删除按钮事件
   list.querySelectorAll('.search-result-delete').forEach(btn => {
-    btn.addEventListener('click', (e) => {
+    btn.addEventListener('click', async (e) => {
       e.stopPropagation(); // 防止冒泡触发食物选择
       const id = btn.dataset.deleteId;
-      if (deleteCustomFood(id)) {
+      if (await deleteCustomFood(id)) {
         // 删除后刷新搜索结果
         const value = state.searchQuery;
         if (value) {
           const builtIn = searchFoods(value);
-          const custom = searchCustomFoods(value);
+          const custom = await searchCustomFoods(value);
           renderSearchResults([...builtIn, ...custom]);
         }
       }
@@ -414,10 +416,10 @@ function renderSearchResults(results) {
 
   // 点击搜索结果 → 弹出份量选择
   list.querySelectorAll('.search-result-item').forEach(item => {
-    item.addEventListener('click', () => {
+    item.addEventListener('click', async () => {
       // 优先从内置数据库查找，否则从自定义食物查找
       let food = getFoodById(item.dataset.foodId);
-      if (!food) food = getCustomFoodById(item.dataset.foodId);
+      if (!food) food = await getCustomFoodById(item.dataset.foodId);
       if (food) showServingModal(food);
     });
   });
@@ -543,7 +545,7 @@ function showAIEstimateError(msg) {
 }
 
 /** 确认添加 AI 估计的食物 */
-function confirmAIEstimate() {
+async function confirmAIEstimate() {
   if (!aiEstimateResult) return;
 
   const data = aiEstimateResult;
@@ -563,7 +565,7 @@ function confirmAIEstimate() {
     time: new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }),
   };
 
-  addIntakeRecord(record);
+  await addIntakeRecord(record);
 
   // Toast 反馈
   const confNote = data.confidence === 'low' ? '（仅供参考）' : '';
@@ -623,7 +625,7 @@ function hideServingModal() {
 }
 
 /** 确认添加食物到今日列表 */
-function confirmAddFood() {
+async function confirmAddFood() {
   const food = state.selectedFood;
   if (!food) return;
 
@@ -666,7 +668,7 @@ function confirmAddFood() {
   };
 
   // 添加到当日记录
-  addIntakeRecord(record);
+  await addIntakeRecord(record);
 
   // Toast 反馈
   showToast('已添加：' + record.foodName + ' ' + record.calories + ' kcal', 'success');
@@ -683,33 +685,27 @@ function confirmAddFood() {
 
 // ==================== 摄入记录管理 ====================
 /** 获取当日所有记录 */
-function getTodayRecords() {
-  const key = storageKey('cc_records_' + formatDate(state.currentDate));
-  try {
-    return JSON.parse(localStorage.getItem(key)) || [];
-  } catch (e) {
-    return [];
-  }
+async function getTodayRecords() {
+  return await getRecordsDB(formatDate(state.currentDate));
 }
 
 /** 保存当日记录 */
-function saveTodayRecords(records) {
+async function saveTodayRecords(records) {
   const key = storageKey('cc_records_' + formatDate(state.currentDate));
   localStorage.setItem(key, JSON.stringify(records));
 }
 
 /** 添加一条摄入记录 */
-function addIntakeRecord(record) {
-  const records = getTodayRecords();
-  records.push(record);
-  saveTodayRecords(records);
-  renderIntakeList();
-  renderDashboard();
-  renderAdvice();
+async function addIntakeRecord(record) {
+  const dateStr = formatDate(state.currentDate);
+  await addRecordDB(dateStr, record);
+  await renderIntakeList();
+  await renderDashboard();
+  await renderAdvice();
 }
 
 /** 删除一条摄入记录（带动画） */
-function removeIntakeRecord(recordId) {
+async function removeIntakeRecord(recordId) {
   // 先给列表项添加移除动画
   const item = document.querySelector('.intake-item-delete[data-id="' + recordId + '"]');
   if (item) {
@@ -717,15 +713,16 @@ function removeIntakeRecord(recordId) {
     if (listItem) {
       listItem.classList.add('intake-item--removing');
       // 动画结束后再真正删除
-      setTimeout(() => {
-        const records = getTodayRecords().filter(r => r.id !== recordId);
-        saveTodayRecords(records);
-        renderIntakeList();
-        renderDashboard();
-        renderAdvice();
+      setTimeout(async () => {
+        const records = await getTodayRecords();
+        const filtered = records.filter(r => r.id !== recordId);
+        await deleteRecordDB(formatDate(state.currentDate), recordId);
+        await renderIntakeList();
+        await renderDashboard();
+        await renderAdvice();
         showToast('已删除', 'warning');
         // 如果列表清空，重新显示引导
-        if (records.length === 0) {
+        if (filtered.length === 0) {
           $('onboarding-tip').style.display = 'flex';
         }
       }, 230);
@@ -733,16 +730,17 @@ function removeIntakeRecord(recordId) {
     }
   }
   // 降级：直接删除
-  const records = getTodayRecords().filter(r => r.id !== recordId);
-  saveTodayRecords(records);
-  renderIntakeList();
-  renderDashboard();
-  renderAdvice();
+  const records = await getTodayRecords();
+  const filtered = records.filter(r => r.id !== recordId);
+  await deleteRecordDB(formatDate(state.currentDate), recordId);
+  await renderIntakeList();
+  await renderDashboard();
+  await renderAdvice();
 }
 
 /** 渲染今日摄入列表 */
-function renderIntakeList() {
-  const records = getTodayRecords();
+async function renderIntakeList() {
+  const records = await getTodayRecords();
   const listEl = $('intake-list');
   const emptyEl = $('intake-empty');
   const countEl = $('intake-count');
@@ -789,13 +787,13 @@ function bindEvents() {
   $('btn-prev-day').addEventListener('click', goPrevDay);
   $('btn-next-day').addEventListener('click', goNextDay);
 
-  // 设置按钮
+  // 设置按钮（openSettingsModal 是 async，作为事件处理器不需要 await）
   $('btn-settings').addEventListener('click', openSettingsModal);
 
   // 设置弹窗事件
   $('btn-settings-cancel').addEventListener('click', closeSettingsModal);
-  $('btn-settings-save').addEventListener('click', () => {
-    saveSettingsFromModal();
+  $('btn-settings-save').addEventListener('click', async () => {
+    await saveSettingsFromModal();
     showToast('设置已保存', 'success');
   });
   $('settings-modal').addEventListener('click', (e) => {
@@ -845,8 +843,8 @@ function bindEvents() {
     openCustomFoodModal();
   });
   $('btn-cf-cancel').addEventListener('click', closeCustomFoodModal);
-  $('btn-cf-save').addEventListener('click', () => {
-    saveCustomFood();
+  $('btn-cf-save').addEventListener('click', async () => {
+    await saveCustomFood();
     // 如果弹窗已关闭（保存成功），显示提示
     if ($('custom-food-modal').style.display === 'none') {
       showToast('自定义食物已添加', 'success');
@@ -859,9 +857,9 @@ function bindEvents() {
   // 登出按钮
   const btnLogout = $('btn-logout');
   if (btnLogout) {
-    btnLogout.addEventListener('click', () => {
+    btnLogout.addEventListener('click', async () => {
       if (confirm('确定要退出登录吗？未保存的设置将丢失。')) {
-        logoutUser();
+        await logoutUser();
         closeSettingsModal();
         showToast('已退出登录', 'info');
         // 返回登录界面

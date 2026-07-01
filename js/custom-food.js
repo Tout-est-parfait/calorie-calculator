@@ -17,16 +17,12 @@ const CUSTOM_FOODS_KEY = 'cc_custom_foods';
 // ==================== 数据读写 ====================
 
 /** 获取所有自定义食物 */
-function getCustomFoods() {
-  try {
-    return JSON.parse(localStorage.getItem(storageKey(CUSTOM_FOODS_KEY))) || [];
-  } catch (e) {
-    return [];
-  }
+async function getCustomFoods() {
+  return await getCustomFoodsDB();
 }
 
 /** 保存自定义食物列表 */
-function saveCustomFoods(foods) {
+async function saveCustomFoods(foods) {
   localStorage.setItem(storageKey(CUSTOM_FOODS_KEY), JSON.stringify(foods));
 }
 
@@ -37,7 +33,7 @@ function saveCustomFoods(foods) {
  * @param {{ name: string, cal: number, carbs?: number, protein?: number, fat?: number }} data
  * @returns {object} 创建的食物对象
  */
-function addCustomFood(data) {
+async function addCustomFood(data) {
   const food = {
     id: 'custom_' + Date.now().toString(36) + Math.random().toString(36).substr(2, 4),
     name: data.name.trim(),
@@ -53,9 +49,10 @@ function addCustomFood(data) {
     ],
   };
 
-  const foods = getCustomFoods();
+  const foods = await getCustomFoods();
   foods.push(food);
-  saveCustomFoods(foods);
+  await saveCustomFoods(foods);
+  await addCustomFoodDB(food);
 
   return food;
 }
@@ -65,12 +62,13 @@ function addCustomFood(data) {
  * @param {string} id
  * @returns {boolean} 是否删除成功
  */
-function deleteCustomFood(id) {
-  const foods = getCustomFoods();
+async function deleteCustomFood(id) {
+  const foods = await getCustomFoods();
   const idx = foods.findIndex(f => f.id === id);
   if (idx === -1) return false;
   foods.splice(idx, 1);
-  saveCustomFoods(foods);
+  await saveCustomFoods(foods);
+  await deleteCustomFoodDB(id);
   return true;
 }
 
@@ -82,11 +80,11 @@ function deleteCustomFood(id) {
  * @param {number} [limit=10]
  * @returns {Array}
  */
-function searchCustomFoods(query, limit) {
+async function searchCustomFoods(query, limit) {
   limit = limit || 10;
   if (!query || !query.trim()) return [];
   const q = query.trim().toLowerCase();
-  const foods = getCustomFoods();
+  const foods = await getCustomFoods();
   return foods.filter(f => f.name.toLowerCase().includes(q)).slice(0, limit);
 }
 
@@ -95,9 +93,9 @@ function searchCustomFoods(query, limit) {
  * @param {string} id
  * @returns {object|null}
  */
-function getCustomFoodById(id) {
+async function getCustomFoodById(id) {
   if (!id || !id.startsWith('custom_')) return null;
-  const foods = getCustomFoods();
+  const foods = await getCustomFoods();
   return foods.find(f => f.id === id) || null;
 }
 
@@ -124,7 +122,7 @@ function closeCustomFoodModal() {
 }
 
 /** 保存自定义食物 */
-function saveCustomFood() {
+async function saveCustomFood() {
   const name = $('cf-name').value.trim();
   const cal  = parseInt($('cf-cal').value);
 
@@ -141,7 +139,7 @@ function saveCustomFood() {
   }
 
   // 添加食物
-  const food = addCustomFood({
+  const food = await addCustomFood({
     name: name,
     cal: cal,
     carbs: parseFloat($('cf-carbs').value) || 0,

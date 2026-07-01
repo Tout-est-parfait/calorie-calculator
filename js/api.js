@@ -193,15 +193,11 @@ function setApiModel(model) {
  * @param {string} dateStr — 日期字符串 YYYY-MM-DD
  * @param {object} adviceData — AI 返回的建议数据
  */
-function saveAIAdvice(dateStr, adviceData) {
-  try {
-    localStorage.setItem(storageKey('cc_ai_advice_' + dateStr), JSON.stringify({
-      data: adviceData,
-      savedAt: Date.now(),
-    }));
-  } catch (e) {
-    // localStorage 满或不可用，静默失败
-  }
+async function saveAIAdvice(dateStr, adviceData) {
+  await saveAICacheDB('advice', dateStr, adviceData);
+  // Keep the old localStorage write as backup too
+  const wrapper = { data: adviceData, savedAt: Date.now() };
+  localStorage.setItem(storageKey('cc_ai_advice_' + dateStr), JSON.stringify(wrapper));
 }
 
 /**
@@ -209,15 +205,16 @@ function saveAIAdvice(dateStr, adviceData) {
  * @param {string} dateStr — 日期字符串 YYYY-MM-DD
  * @returns {object|null} 建议数据，无则返回 null
  */
-function loadAIAdvice(dateStr) {
+async function loadAIAdvice(dateStr) {
+  try {
+    const cached = await getAICacheDB('advice', dateStr);
+    if (cached) return cached;
+  } catch (e) { /* fall through to local */ }
+  // Fallback: direct localStorage read
   try {
     const raw = localStorage.getItem(storageKey('cc_ai_advice_' + dateStr));
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      return parsed.data || null;
-    }
-  } catch (e) {}
-  return null;
+    return raw ? JSON.parse(raw) : null;
+  } catch (e) { return null; }
 }
 
 // ==================== 每日食谱持久化 ====================
@@ -227,13 +224,10 @@ function loadAIAdvice(dateStr) {
  * @param {string} dateStr — 日期字符串 YYYY-MM-DD
  * @param {object} mealPlanData — AI 返回的食谱数据
  */
-function saveMealPlan(dateStr, mealPlanData) {
-  try {
-    localStorage.setItem(storageKey('cc_mealplan_' + dateStr), JSON.stringify({
-      data: mealPlanData,
-      savedAt: Date.now(),
-    }));
-  } catch (e) {}
+async function saveMealPlan(dateStr, mealPlanData) {
+  await saveAICacheDB('mealplan', dateStr, mealPlanData);
+  const wrapper = { data: mealPlanData, savedAt: Date.now() };
+  localStorage.setItem(storageKey('cc_mealplan_' + dateStr), JSON.stringify(wrapper));
 }
 
 /**
@@ -241,15 +235,15 @@ function saveMealPlan(dateStr, mealPlanData) {
  * @param {string} dateStr — 日期字符串 YYYY-MM-DD
  * @returns {object|null} 食谱数据，无则返回 null
  */
-function loadMealPlan(dateStr) {
+async function loadMealPlan(dateStr) {
+  try {
+    const cached = await getAICacheDB('mealplan', dateStr);
+    if (cached) return cached;
+  } catch (e) { /* fall through to local */ }
   try {
     const raw = localStorage.getItem(storageKey('cc_mealplan_' + dateStr));
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      return parsed.data || null;
-    }
-  } catch (e) {}
-  return null;
+    return raw ? JSON.parse(raw) : null;
+  } catch (e) { return null; }
 }
 
 // ==================== API 连接测试 ====================

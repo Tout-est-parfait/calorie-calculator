@@ -3,7 +3,7 @@
  * Phase 9: 离线缓存，PWA 支持
  */
 
-const CACHE_NAME = 'calorie-calc-v2';
+const CACHE_NAME = 'calorie-calc-v3';
 
 // 需要预缓存的所有静态文件
 const PRECACHE_URLS = [
@@ -12,6 +12,7 @@ const PRECACHE_URLS = [
   'css/style.css',
   'js/food-database.js',
   'js/auth.js',
+  'js/db.js',
   'js/api.js',
   'js/settings.js',
   'js/custom-food.js',
@@ -46,6 +47,10 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   // 只处理 GET 请求
   if (event.request.method !== 'GET') return;
+
+  // Never cache API calls — always go to network
+  const url = new URL(event.request.url);
+  if (url.pathname.startsWith('/api/')) return;
 
   event.respondWith(
     caches.match(event.request).then((cached) => {

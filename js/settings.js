@@ -26,7 +26,12 @@ const DEFAULT_SETTINGS = {
 // ==================== 设置读写 ====================
 
 /** 读取用户设置（合并默认值） */
-function loadSettings() {
+async function loadSettings() {
+  try {
+    const remote = await getSettingsDB();
+    if (remote) return { ...DEFAULT_SETTINGS, ...remote };
+  } catch (e) { /* fall through to local */ }
+
   try {
     const raw = localStorage.getItem(storageKey('cc_settings'));
     if (raw) {
@@ -40,8 +45,9 @@ function loadSettings() {
 }
 
 /** 保存用户设置 */
-function saveSettings(settings) {
+async function saveSettings(settings) {
   localStorage.setItem(storageKey('cc_settings'), JSON.stringify(settings));
+  await saveSettingsDB(settings);
 }
 
 // ==================== BMR / TDEE 计算 ====================
@@ -95,8 +101,8 @@ function calcRecommendedTarget(settings) {
  * 供 dashboard.js / advisor.js / history.js 调用
  * @returns {number}
  */
-function getCalorieTarget() {
-  const settings = loadSettings();
+async function getCalorieTarget() {
+  const settings = await loadSettings();
   if (settings.customCalorieTarget) {
     return settings.customCalorieTarget;
   }
@@ -107,8 +113,8 @@ function getCalorieTarget() {
  * 获取完整的用户设置
  * @returns {object}
  */
-function getUserSettings() {
-  return loadSettings();
+async function getUserSettings() {
+  return await loadSettings();
 }
 
 // ==================== 设置弹窗交互 ====================
@@ -117,8 +123,8 @@ function getUserSettings() {
 let editingSettings = null;
 
 /** 打开设置弹窗 */
-function openSettingsModal() {
-  editingSettings = loadSettings();
+async function openSettingsModal() {
+  editingSettings = await loadSettings();
 
   // 锁定背景页面滚动
   document.body.style.overflow = 'hidden';
@@ -184,7 +190,7 @@ function openSettingsModal() {
     $('custom-calorie-wrap').style.display = on ? 'flex' : 'none';
     $('badge-auto').style.display = on ? 'none' : 'inline';
     if (on) {
-      $('set-custom-calorie').value = getCalorieTarget();
+      getCalorieTarget().then(v => { $('set-custom-calorie').value = v; });
       $('settings-calorie-display').textContent = $('set-custom-calorie').value;
       $('badge-auto').textContent = '手动设置';
       $('badge-auto').style.background = 'var(--color-warning-light)';
@@ -229,7 +235,7 @@ function closeSettingsModal() {
 }
 
 /** 保存设置 */
-function saveSettingsFromModal() {
+async function saveSettingsFromModal() {
   if (!editingSettings) return;
 
   // 读取表单最新值
@@ -238,12 +244,12 @@ function saveSettingsFromModal() {
   editingSettings.height = parseInt($('set-height').value) || DEFAULT_SETTINGS.height;
 
   if ($('toggle-custom-calorie').checked) {
-    editingSettings.customCalorieTarget = parseInt($('set-custom-calorie').value) || getCalorieTarget();
+    editingSettings.customCalorieTarget = parseInt($('set-custom-calorie').value) || await getCalorieTarget();
   } else {
     editingSettings.customCalorieTarget = null;
   }
 
-  saveSettings(editingSettings);
+  await saveSettings(editingSettings);
   closeSettingsModal();
 
   // 设置变更后刷新所有视图（热量目标可能变了）
