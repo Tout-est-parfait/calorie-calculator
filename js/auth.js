@@ -218,7 +218,8 @@ async function registerUser(username, password) {
 /**
  * 用户登录
  * 优先尝试远程登录（D1），支持跨设备登录
- * 如果本地有用户数据，也支持离线密码验证
+ * 发送明文密码到服务端（HTTPS 加密），服务端用存储的盐做哈希验证
+ * 如果本地有用户数据，也先做本地密码验证作为快速路径
  * @param {string} username
  * @param {string} password
  * @returns {Promise<{success: boolean, error?: string}>}
@@ -235,35 +236,20 @@ async function loginUser(username, password) {
   let fromRemote = false;
 
   // 第一步：尝试远程登录（D1 数据库）
-  // 优点：支持跨设备、密码哈希验证在服务端完成
+  // 发送明文密码，服务端用存储的盐做 SHA-256 哈希后验证
+  // 优点：支持跨设备、新设备无需知道注册时的盐值
   try {
-    const users = loadUsers();
-    const localUser = users.find(u => u.username === trimmedName);
-    if (localUser) {
-      // 本地有此用户，先做本地哈希验证再发给服务端
-      const hash = await hashPassword(password, localUser.salt);
-      const remoteResult = await loginRemote(trimmedName, hash);
-      if (remoteResult.success) {
-        loggedIn = true;
-        userId = remoteResult.userId;
-        fromRemote = true;
-      }
+    const remoteResult = await loginRemote(trimmedName, password);
+    if (remoteResult.success) {
+      loggedIn = true;
+      userId = remoteResult.userId;
+      fromRemote = true;
     } else {
-      // 新设备：本地无此用户，尝试远程登录
-      // 用随机盐生成哈希（服务端会用自己的盐验证）
-      const tempSalt = generateSalt();
-      const tempHash = await hashPassword(password, tempSalt);
-      const remoteResult = await loginRemote(trimmedName, tempHash);
-      if (remoteResult.success) {
-        loggedIn = true;
-        userId = remoteResult.userId;
-        fromRemote = true;
-      } else {
-        return { success: false, error: '用户名不存在或密码错误' };
-      }
+      // 远程明确返回失败（用户名不存在或密码错误）
+      return { success: false, error: remoteResult.error || '用户名不存在或密码错误' };
     }
   } catch (e) {
-    // 远程不可用，降级到本地验证
+    // 远程不可用（网络错误等），降级到本地验证
     console.warn('远程登录不可用，使用本地验证:', e.message);
   }
 

@@ -90,11 +90,23 @@ async function handleRegister(db, body) {
   });
 }
 
+/**
+ * 服务端 SHA-256 + 盐 哈希（与客户端 hashPassword 算法一致）
+ */
+async function serverHash(password, salt) {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(password + salt);
+  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+  return Array.from(new Uint8Array(hashBuffer))
+    .map(b => b.toString(16).padStart(2, '0'))
+    .join('');
+}
+
 /** 用户登录 */
 async function handleLogin(db, body) {
-  const { username, passwordHash } = body;
+  const { username, password, passwordHash } = body;
 
-  if (!username || !passwordHash) {
+  if (!username || (!password && !passwordHash)) {
     return errorResponse('缺少用户名或密码', 400);
   }
 
@@ -107,8 +119,18 @@ async function handleLogin(db, body) {
     return errorResponse('用户名或密码错误', 401);
   }
 
-  // 验证密码哈希
-  if (user.password_hash !== passwordHash) {
+  // 验证密码：优先服务端哈希（明文密码），兼容旧客户端预哈希
+  let isValid = false;
+  if (password) {
+    // 明文密码：服务端用存储的盐做 SHA-256 哈希后比对
+    const hash = await serverHash(password, user.salt);
+    isValid = (hash === user.password_hash);
+  } else if (passwordHash) {
+    // 预哈希密码：直接比对（兼容旧客户端）
+    isValid = (user.password_hash === passwordHash);
+  }
+
+  if (!isValid) {
     return errorResponse('用户名或密码错误', 401);
   }
 

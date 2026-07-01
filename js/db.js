@@ -150,14 +150,16 @@ async function registerRemote(username, passwordHash, salt, userId) {
 
 /**
  * 远程登录
+ * @param {string} username
+ * @param {string} password — 明文密码（通过 HTTPS 加密传输，服务端用存储的盐验证）
  * @returns {Promise<{success: boolean, token?: string, userId?: string, error?: string}>}
  */
-async function loginRemote(username, passwordHash) {
+async function loginRemote(username, password) {
   try {
     const result = await apiRequest('POST', AUTH_API, '', {
       action: 'login',
       username,
-      passwordHash,
+      password,
     }, null);
 
     if (result.success && result.token) {
