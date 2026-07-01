@@ -384,7 +384,7 @@ async function requestAIAdvice(records, totalCal, totalCarbs, totalProtein, tota
           <span class="advice-icon">🔑</span>
           <span class="advice-title">需要 API Key</span>
         </div>
-        <p class="advice-text">请先在设置中配置 DeepSeek API Key，即可使用 AI 深度分析功能。</p>
+        <p class="advice-text">请先在设置中配置 Kimi API Key，即可使用 AI 深度分析功能。</p>
       </div>`;
     return;
   }
@@ -399,7 +399,7 @@ async function requestAIAdvice(records, totalCal, totalCarbs, totalProtein, tota
         <span class="advice-icon">⏳</span>
         <span class="advice-title">AI 正在分析您的饮食数据...</span>
       </div>
-      <p class="advice-text">正在请求 DeepSeek AI 进行深度分析，请稍候。</p>
+      <p class="advice-text">正在请求 Kimi AI 进行深度分析，请稍候。</p>
     </div>`;
 
   // 构建每日数据
@@ -443,7 +443,7 @@ async function requestAIAdvice(records, totalCal, totalCarbs, totalProtein, tota
             <span class="advice-icon">🔑</span>
             <span class="advice-title">需要 API Key</span>
           </div>
-          <p class="advice-text">请先在设置中配置 DeepSeek API Key。</p>
+          <p class="advice-text">请先在设置中配置 Kimi API Key。</p>
         </div>`;
     } else {
       resultArea.innerHTML = `
@@ -497,7 +497,7 @@ function renderAIAdviceResultHTML(container, data) {
       ${data.exerciseAdvice ? `<p class="advice-text" style="margin-top:8px"><strong>🏃 运动建议：</strong>${data.exerciseAdvice}</p>` : ''}
       ${tipsHTML}
       ${foodsHTML}
-      <p class="ai-disclaimer">以上分析由 DeepSeek AI 生成，仅供参考，不构成专业医疗建议。</p>
+      <p class="ai-disclaimer">以上分析由 Kimi AI 生成，仅供参考，不构成专业医疗建议。</p>
     </div>`;
 }
 
@@ -549,7 +549,7 @@ async function generateMealPlan() {
   if (!hasApiKey()) {
     emptyEl.innerHTML = `
       <span class="empty-icon">🔑</span>
-      <p class="empty-text">请先在设置中配置 DeepSeek API Key</p>
+      <p class="empty-text">请先在设置中配置 Kimi API Key</p>
       <button class="ai-advice-btn" id="btn-generate-mealplan">🤖 生成食谱</button>`;
     const newBtn = $('btn-generate-mealplan');
     if (newBtn) {
@@ -582,7 +582,7 @@ async function generateMealPlan() {
     if (result.error === 'NO_API_KEY') {
       emptyEl.innerHTML = `
         <span class="empty-icon">🔑</span>
-        <p class="empty-text">请先在设置中配置 DeepSeek API Key</p>
+        <p class="empty-text">请先在设置中配置 Kimi API Key</p>
         <button class="ai-advice-btn" id="btn-generate-mealplan">🤖 生成食谱</button>`;
     } else {
       emptyEl.innerHTML = `
@@ -701,7 +701,7 @@ function renderMealPlanResultHTML(container, data) {
       </div>
       ${trainingHTML}
       ${tipsHTML}
-      <p class="ai-disclaimer">以上食谱由 DeepSeek AI 生成，仅供参考，请根据个人情况调整。</p>
+      <p class="ai-disclaimer">以上食谱由 Kimi AI 生成，仅供参考，请根据个人情况调整。</p>
     </div>`;
 }
 

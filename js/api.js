@@ -1,9 +1,9 @@
 /**
  * 热量计算器 — AI API 集成模块
- * Phase 11-12: DeepSeek AI 集成
+ * Phase 11-12: Kimi AI 集成（月之暗面 Moonshot）
  *
  * 功能：
- *   1. DeepSeek API 集成
+ *   1. Kimi API 集成
  *   2. API Key 管理
  *   3. AI 食物估计 — 用户描述食物，AI 返回估计的营养数据
  *   4. AI 智能建议 — 发送当日摄入数据，获取个性化饮食与运动建议
@@ -16,18 +16,18 @@
 // ==================== 供应商配置 ====================
 
 const AI_PROVIDER = {
-  id: 'deepseek',
-  name: 'DeepSeek',
-  endpoint: 'https://api.deepseek.com/v1/chat/completions',
-  defaultModel: 'deepseek-chat',
-  docsUrl: 'https://platform.deepseek.com/api_keys',
+  id: 'kimi',
+  name: 'Kimi',
+  endpoint: 'https://api.moonshot.cn/v1/chat/completions',
+  defaultModel: 'moonshot-v1-8k',
+  docsUrl: 'https://platform.moonshot.cn/console/api-keys',
 };
 
 const API_TIMEOUT = 15000; // 15 秒超时
 
 // ==================== 代理模式配置 ====================
 //
-// 代理模式：前端请求同源路径（如 /api/deepseek/chat/completions），
+// 代理模式：前端请求同源路径（如 /api/kimi/chat/completions），
 // 由 Nginx / Cloudflare Worker 转发到真正的 AI API。
 // 密钥配置在代理端，不暴露给浏览器 —— 更安全，且绕过 CORS。
 //
@@ -62,7 +62,7 @@ function setProxyMode(enabled) {
 function getProxyPath() {
   const key = 'cc_proxy_path';
   const saved = localStorage.getItem(storageKey(key));
-  return (saved && saved.trim()) || '/api/deepseek/chat/completions';
+  return (saved && saved.trim()) || '/api/kimi/chat/completions';
 }
 
 /**
@@ -110,11 +110,11 @@ function buildRequestHeaders(apiKey) {
 
 /**
  * 获取 API Key
- * 向后兼容：如果旧键 cc_apikey（Phase 11）中有值，自动迁移
+ * 向后兼容：如果旧键 cc_apikey_deepseek 或 cc_apikey (Phase 11) 中有值，自动迁移
  * @returns {string|null}
  */
 function getApiKey() {
-  const key = 'cc_apikey_deepseek';
+  const key = 'cc_apikey_kimi';
   let val = localStorage.getItem(storageKey(key));
 
   // 向后兼容：Phase 11 旧键 → 自动迁移
@@ -128,6 +128,17 @@ function getApiKey() {
     }
   }
 
+  // 向后兼容：DeepSeek 旧键 → 自动迁移
+  if (!val) {
+    const deepseekKey = 'cc_apikey_deepseek';
+    const deepseekVal = localStorage.getItem(storageKey(deepseekKey));
+    if (deepseekVal) {
+      setApiKey(deepseekVal);
+      localStorage.removeItem(storageKey(deepseekKey));
+      return deepseekVal;
+    }
+  }
+
   return val || null;
 }
 
@@ -136,7 +147,7 @@ function getApiKey() {
  * @param {string} key
  */
 function setApiKey(key) {
-  localStorage.setItem(storageKey('cc_apikey_deepseek'), key.trim());
+  localStorage.setItem(storageKey('cc_apikey_kimi'), key.trim());
 }
 
 /**
@@ -157,7 +168,7 @@ function hasApiKey() {
  * @returns {string} 模型名称（有自定义则返回自定义，否则返回默认）
  */
 function getApiModel() {
-  const key = 'cc_apimodel_deepseek';
+  const key = 'cc_apimodel_kimi';
   const saved = localStorage.getItem(storageKey(key));
   return (saved && saved.trim()) ? saved.trim() : AI_PROVIDER.defaultModel;
 }
@@ -167,7 +178,7 @@ function getApiModel() {
  * @param {string} model
  */
 function setApiModel(model) {
-  const key = 'cc_apimodel_deepseek';
+  const key = 'cc_apimodel_kimi';
   if (model && model.trim()) {
     localStorage.setItem(storageKey(key), model.trim());
   } else {
@@ -300,7 +311,7 @@ async function testApiConnection() {
 // ==================== API 调用核心 ====================
 
 /**
- * 调用 DeepSeek API
+ * 调用 Kimi API（月之暗面 Moonshot）
  * @param {Array<{role: string, content: string}>} messages
  * @param {object} [options]
  * @returns {Promise<object|null>} 解析后的 JSON 响应
@@ -326,7 +337,7 @@ async function callAI(messages, options) {
       max_tokens: opts.maxTokens || 1024,
     };
 
-    // 请求 JSON 格式输出（DeepSeek 支持）
+    // 请求 JSON 格式输出（Kimi/Moonshot 支持）
     // 注意：使用 json_object 时，消息中需包含 "json" 一词
     if (opts.jsonOutput !== false) {
       const allText = messages.map(m => m.content).join(' ');

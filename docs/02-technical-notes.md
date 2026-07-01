@@ -20,14 +20,14 @@
 │   ├── app.js              # 应用入口，初始化与协调（3Tab导航 + 视图切换）
 │   ├── food-database.js    # 内置食物数据库（173 种食物，8 个分类）
 │   ├── auth.js             # 用户认证（注册/登录/会话/数据隔离）
-│   ├── api.js              # DeepSeek API 集成（食物估计 + AI建议 + 每日食谱）
+│   ├── api.js              # Kimi API 集成（食物估计 + AI建议 + 每日食谱）
 │   ├── settings.js         # 用户设置（BMR + 热量目标 + API Key + 代理模式）
 │   ├── custom-food.js      # 自定义食物 CRUD
 │   ├── dashboard.js        # 仪表盘渲染（环形进度条 + 营养素卡片 + 供能比例条）
 │   ├── advisor.js          # 科学建议引擎（规则引擎 + AI深度分析 + AI食谱计划）
 │   ├── history.js          # 历史记录管理（7 天统计 + 日期列表）
 ├── functions/              # Cloudflare Pages Functions（服务端API代理）
-│   └── api/deepseek/chat/completions.js  # DeepSeek API 代理（内置默认密钥）
+│   └── api/kimi/chat/completions.js  # Kimi API 代理（内置默认密钥）
 ├── proxy/                  # 代理配置参考文件（非 Cloudflare 部署用）
 │   ├── nginx.conf
 │   ├── cloudflare-worker.js
@@ -132,7 +132,7 @@ targets = {
 | `cc_records_YYYY-MM-DD` | JSON 数组 | 每日摄入记录 |
 | `cc_settings` | JSON 对象 | 用户设置（目标/身体数据/热量） |
 | `cc_custom_foods` | JSON 数组 | 用户自定义食物 |
-| `cc_apikey_deepseek` | string | DeepSeek API Key（可选） |
+| `cc_apikey_kimi` | string | Kimi API Key（可选） |
 | `cc_proxy_mode` | boolean | 代理模式开关 |
 | `cc_proxy_path` | string | 代理路径 |
 | `cc_ai_advice_YYYY-MM-DD` | JSON 对象 | AI 深度分析结果（按日期缓存） |
@@ -226,23 +226,23 @@ targets = {
 - 使用 Web Crypto API `SHA-256` + 随机盐（`crypto.getRandomValues`）做哈希
 - 定位是「防止数据混乱」而非金融级安全
 
-## DeepSeek API 集成
+## Kimi API 集成（月之暗面 Moonshot）
 
 ### 端点与模式
 
-- API 端点：`https://api.deepseek.com/v1/chat/completions`
-- 模型：`deepseek-chat`（可自定义）
-- 代理端点：`/api/deepseek/chat/completions`（同源路径）
+- API 端点：`https://api.moonshot.cn/v1/chat/completions`
+- 模型：`moonshot-v1-8k`（可自定义）
+- 代理端点：`/api/kimi/chat/completions`（同源路径）
 
 **两种工作模式：**
 
 | 模式 | 请求路径 | Authorization | 适用场景 |
 |------|----------|---------------|----------|
-| 代理模式 | 同源 `/api/deepseek/chat/completions` | 服务端附加默认密钥 | 零配置、安全（推荐） |
-| 直接模式 | `https://api.deepseek.com/v1/chat/completions` | 浏览器携带用户 Key | 用户使用自有 Key |
+| 代理模式 | 同源 `/api/kimi/chat/completions` | 服务端附加默认密钥 | 零配置、安全（推荐） |
+| 直接模式 | `https://api.moonshot.cn/v1/chat/completions` | 浏览器携带用户 Key | 用户使用自有 Key |
 
 **默认密钥安全设计：**
-- 密钥仅存储在服务端 `functions/api/deepseek/chat/completions.js`
+- 密钥仅存储在服务端 `functions/api/kimi/chat/completions.js`
 - 前端代码中不包含密钥的任何片段
 - `functions/proxy/[[path]].js` 拦截 `/proxy/*` 路径，防止配置文件泄漏
 - 代理模式下用户无需填写任何 API Key 即可使用所有 AI 功能
@@ -277,6 +277,6 @@ targets = {
 
 - 无后端服务
 - 无数据库
-- 可选第三方 API（DeepSeek，用户自备Key）
+- 可选第三方 API（Kimi，用户自备Key）
 - 无 npm 包
 - 无构建工具

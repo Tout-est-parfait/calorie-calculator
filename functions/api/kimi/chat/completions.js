@@ -1,6 +1,6 @@
 /**
  * Cloudflare Pages Function — Kimi API 代理（月之暗面 Moonshot）
- * 路径: /api/deepseek/chat/completions（旧路径，向后兼容）
+ * 路径: /api/kimi/chat/completions
  *
  * 内置默认密钥转发请求到 Kimi API。
  * 如前端传了 Authorization header（用户自有 Key），优先使用用户 Key。

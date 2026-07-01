@@ -1,26 +1,27 @@
 /**
  * 热量计算器 — Cloudflare Worker 代理
- * 将 /api/deepseek 转发到 DeepSeek API
+ * 将 /api/kimi 转发到 Kimi API（月之暗面 Moonshot）
  *
  * 使用方法：
  *   1. 在 Cloudflare Dashboard → Workers & Pages → 创建 Worker
- *   2. 粘贴此代码
- *   3. 运行 `npx wrangler secret put DEEPSEEK_API_KEY` 注入密钥
+ *   2. 粘贴此代码（代码中已内置默认 API Key）
+ *   3. （可选）运行 `npx wrangler secret put KIMI_API_KEY` 覆盖默认密钥
  *   4. 部署并绑定域名（或在应用中配置代理路径指向 Worker URL）
  *
  * 代理路径：
- *   DeepSeek:  /api/deepseek/chat/completions
+ *   Kimi:  /api/kimi/chat/completions
+ *   DeepSeek（旧，向后兼容）: /api/deepseek/chat/completions
  *
- * 注意：本文件不包含任何真实 API Key，请通过 Secret 配置。
+ * 注意：代码中已内置默认 Kimi API Key。如需更换，修改 DEFAULT_API_KEY 或通过 Secret 覆盖。
  */
 
 // ==================== 配置区 ====================
-// 密钥通过 Cloudflare Worker Secret 注入
-// 运行: npx wrangler secret put DEEPSEEK_API_KEY
-// 如果没有注入密钥，Worker 会返回 500 错误提示配置
+// 内置默认密钥，如需更换请修改此处
+// 或运行: npx wrangler secret put KIMI_API_KEY 覆盖
 // ==============================================
 
-const UPSTREAM_URL = 'https://api.deepseek.com/v1/chat/completions';
+const UPSTREAM_URL = 'https://api.moonshot.cn/v1/chat/completions';
+const DEFAULT_API_KEY = 'sk-OaVZ418bWB5nmPB9KQBduwW1QEg6hiFcYehHIAHu53vMGRaL';
 
 addEventListener('fetch', (event) => {
   event.respondWith(handleRequest(event.request));
@@ -35,23 +36,17 @@ async function handleRequest(request) {
     return new Response('Method Not Allowed', { status: 405 });
   }
 
-  // 路由匹配：/api/deepseek/chat/completions
-  if (path !== '/api/deepseek/chat/completions') {
+  // 路由匹配：支持新路径 /api/kimi/chat/completions 和旧路径 /api/deepseek/chat/completions
+  if (path !== '/api/kimi/chat/completions' && path !== '/api/deepseek/chat/completions') {
     return new Response('Not Found', { status: 404 });
   }
 
-  // 从 Secret 或环境变量中读取 API Key
-  const API_KEY = (typeof DEEPSEEK_API_KEY !== 'undefined') ? DEEPSEEK_API_KEY : '';
-
-  if (!API_KEY || API_KEY.startsWith('YOUR_')) {
-    return new Response(
-      JSON.stringify({
-        error: {
-          message: '服务器未配置 API Key。请运行 `npx wrangler secret put DEEPSEEK_API_KEY` 注入密钥。\n获取地址：https://platform.deepseek.com/api_keys',
-        },
-      }),
-      { status: 500, headers: { 'Content-Type': 'application/json' } }
-    );
+  // 密钥优先级：
+  //   1. Cloudflare Worker Secret — KIMI_API_KEY
+  //   2. 内置默认 Key
+  let API_KEY = (typeof KIMI_API_KEY !== 'undefined') ? KIMI_API_KEY : '';
+  if (!API_KEY) {
+    API_KEY = DEFAULT_API_KEY;
   }
 
   // 读取前端发来的请求体并转发
@@ -72,7 +67,7 @@ async function handleRequest(request) {
     const corsHeaders = {
       'Access-Control-Allow-Origin': '*',
       'Access-Control-Allow-Methods': 'POST, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type',
+      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
     };
 
     // 处理 OPTIONS 预检请求

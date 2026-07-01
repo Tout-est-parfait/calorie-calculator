@@ -471,7 +471,7 @@ async function submitAIEstimate() {
 
   // 检查 API Key
   if (!hasApiKey()) {
-    showAIEstimateError('请先在设置中配置 DeepSeek API Key');
+    showAIEstimateError('请先在设置中配置 Kimi API Key');
     return;
   }
 
@@ -488,7 +488,7 @@ async function submitAIEstimate() {
 
   if (!result.success) {
     if (result.error === 'NO_API_KEY') {
-      showAIEstimateError('请先在设置中配置 DeepSeek API Key');
+      showAIEstimateError('请先在设置中配置 Kimi API Key');
     } else {
       showAIEstimateError(result.error || '估计失败，请稍后重试');
     }
