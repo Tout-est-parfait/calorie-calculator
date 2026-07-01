@@ -75,11 +75,8 @@ async function onAuthSuccess() {
   }
 }
 
-/** 匿名跳过 */
-async function onAuthSkip() {
-  hideAuthScreen();
-  await initApp();
-}
+/** 匿名跳过（已禁用：必须登录使用） */
+// onAuthSkip 已移除 — 应用要求用户登录
 
 // ==================== 认证事件绑定 ====================
 function bindAuthEvents() {
@@ -164,8 +161,7 @@ function bindAuthEvents() {
     if (e.key === 'Enter') $('auth-btn-register').click();
   });
 
-  // 匿名跳过
-  $('auth-skip').addEventListener('click', onAuthSkip);
+  // 匿名跳过已移除 — 必须登录才能使用
 }
 
 // ==================== 工具函数 ====================
@@ -285,6 +281,18 @@ async function refreshView() {
   if (state.activeTab === 'mealplan') {
     await renderMealPlan();
   }
+  // 更新 AI 食谱 Tab 和 AI 建议区域可见性
+  const isToday = isSameDay(state.currentDate, state.today);
+  const isPast = state.currentDate < state.today && !isToday;
+  $('advice-section').style.display = isToday ? 'flex' : 'none';
+  const mealplanBtn = document.querySelector('.bottom-nav-btn[data-tab="mealplan"]');
+  if (mealplanBtn) {
+    mealplanBtn.style.display = isPast ? 'none' : '';
+    // 如果当前在食谱Tab但日期是过去，自动切回仪表盘
+    if (isPast && state.activeTab === 'mealplan') {
+      switchTab('dashboard');
+    }
+  }
 }
 
 // ==================== 底部导航 ====================
@@ -299,6 +307,13 @@ function switchTab(tab) {
     btn.classList.toggle('bottom-nav-btn--active', isActive);
   });
 
+  // 控制 AI 食谱 Tab 可见性：仅当天及未来显示
+  const mealplanBtn = document.querySelector('.bottom-nav-btn[data-tab="mealplan"]');
+  if (mealplanBtn) {
+    const isPast = state.currentDate < state.today && !isSameDay(state.currentDate, state.today);
+    mealplanBtn.style.display = isPast ? 'none' : '';
+  }
+
   if (tab === 'history') {
     showHistoryView();
   } else if (tab === 'mealplan') {
@@ -310,16 +325,26 @@ function switchTab(tab) {
 
 /** 显示仪表盘视图（搜索 + 摄入列表 + 仪表盘 + 建议） */
 function showDashboardView() {
+  const isToday = isSameDay(state.currentDate, state.today);
+
   $('dashboard').style.display = 'flex';
   $('search-section').style.display = 'block';
   $('intake-section').style.display = 'flex';
-  $('advice-section').style.display = 'flex';
+  // AI 建议仅当日可见
+  $('advice-section').style.display = isToday ? 'flex' : 'none';
   $('history-view').style.display = 'none';
   $('mealplan-section').style.display = 'none';
   // 恢复日期导航，隐藏返回按钮
   $('btn-prev-day').style.display = '';
   $('btn-next-day').style.display = '';
   $('btn-back').style.display = 'none';
+
+  // 底部导航：AI 食谱 Tab 仅在当天及未来可见
+  const mealplanBtn = document.querySelector('.bottom-nav-btn[data-tab="mealplan"]');
+  if (mealplanBtn) {
+    const isPast = state.currentDate < state.today && !isSameDay(state.currentDate, state.today);
+    mealplanBtn.style.display = isPast ? 'none' : '';
+  }
 }
 
 /** 显示历史记录视图 */

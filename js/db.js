@@ -668,14 +668,7 @@ async function syncFromServer() {
       localStorage.setItem(cacheKey, JSON.stringify(result.settings));
     }
 
-    // 写入 AI 缓存
-    if (result.aiCache) {
-      for (const c of result.aiCache) {
-        if (!c.data) continue;
-        const key = storageKey('cc_' + (c.type === 'advice' ? 'ai_advice_' : 'mealplan_') + c.date);
-        localStorage.setItem(key, JSON.stringify({ data: c.data, savedAt: c.savedAt }));
-      }
-    }
+    // 注：AI 建议/食谱仅保存在本地 localStorage，不从 D1 同步
 
     // 标记已同步
     localStorage.setItem(storageKey('cc_synced_to_d1'), 'true');
@@ -703,7 +696,7 @@ async function migrateToServer() {
       records: collectAllRecordsLocal(),
       customFoods: collectCustomFoodsLocal(),
       settings: collectSettingsLocal(),
-      aiCache: collectAllAICacheLocal(),
+      // 注：AI 建议/食谱仅保存在本地，不迁移到 D1
     };
 
     const result = await apiPost('sync', payload);

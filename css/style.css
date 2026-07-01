@@ -1578,19 +1578,10 @@ input {
   text-align: center;
 }
 
-.auth-skip {
+.auth-footer-text {
   font-size: var(--font-size-sm);
   color: var(--text-hint);
-  cursor: pointer;
-  background: none;
-  border: none;
-  font-family: inherit;
   padding: var(--space-sm) var(--space-md);
-  transition: color var(--transition-fast);
-}
-
-.auth-skip:hover {
-  color: var(--text-secondary);
 }
 
 /* AI 估计入口链接 */
@@ -1909,6 +1900,20 @@ input {
   padding: 2px 10px;
   border-radius: 12px;
   margin-left: auto;
+}
+
+.mealplan-next-meal {
+  background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%);
+  border-radius: var(--border-radius-sm);
+  padding: var(--space-md);
+  font-size: var(--font-size-sm);
+  color: var(--text-primary);
+  line-height: 1.6;
+  border: 1px solid rgba(76, 175, 80, 0.2);
+}
+
+.mealplan-next-meal strong {
+  color: var(--color-primary-dark);
 }
 
 /* ---------- 弹窗 ---------- */

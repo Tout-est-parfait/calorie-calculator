@@ -173,11 +173,12 @@ async function renderAdvice() {
     </div>
   `).join('');
 
-  // 添加 AI 深度分析按钮（仅在有记录时显示）
-  if (records.length > 0) {
+  // 添加 AI 深度分析按钮（仅当日且有记录时显示）
+  const isToday = isSameDay(state.currentDate, state.today);
+  if (records.length > 0 && isToday) {
     // 检查是否有已保存的 AI 建议
     const dateStr = formatDate(state.currentDate);
-    const savedAdvice = await loadAIAdvice(dateStr);
+    const savedAdvice = loadAIAdvice(dateStr);
     const hasSaved = savedAdvice && savedAdvice.summary;
 
     container.innerHTML += `
@@ -509,7 +510,7 @@ function renderAIAdviceResultHTML(container, data) {
  */
 async function renderMealPlan() {
   const dateStr = formatDate(state.currentDate);
-  const savedPlan = await loadMealPlan(dateStr);
+  const savedPlan = loadMealPlan(dateStr);
   const emptyEl = $('mealplan-empty');
   const resultEl = $('mealplan-result');
 
@@ -573,7 +574,24 @@ async function generateMealPlan() {
   };
   const dailyTarget = await getCalorieTarget();
 
-  const result = await getDailyMealPlan(userProfile, dailyTarget);
+  // 如果是当天，获取今日已摄入记录，为下一餐提供上下文
+  const dateStr = formatDate(state.currentDate);
+  const isToday = isSameDay(state.currentDate, state.today);
+  let todayIntakeContext = '';
+  if (isToday) {
+    try {
+      const todayRecords = await getTodayRecords();
+      if (todayRecords.length > 0) {
+        const totalCal = todayRecords.reduce((s, r) => s + r.calories, 0);
+        const foodList = todayRecords.map(r =>
+          `${r.foodName}(${r.servingLabel || r.grams + 'g'}, ${r.calories}kcal)`
+        ).join('、');
+        todayIntakeContext = `\n今日已摄入：${foodList}。已摄入热量：${totalCal}kcal（目标${dailyTarget}kcal，剩余${dailyTarget - totalCal}kcal）。请为用户的「下一餐」提供针对性建议。`;
+      }
+    } catch (e) { /* ignore */ }
+  }
+
+  const result = await getDailyMealPlan(userProfile, dailyTarget, todayIntakeContext);
 
   btn.disabled = false;
   btn.textContent = '🤖 重新生成';
@@ -700,6 +718,7 @@ function renderMealPlanResultHTML(container, data) {
         ${mealsHTML}
       </div>
       ${trainingHTML}
+      ${data.nextMealSuggestion ? `<div class="mealplan-next-meal">🍽️ <strong>下一餐建议：</strong>${data.nextMealSuggestion}</div>` : ''}
       ${tipsHTML}
       <p class="ai-disclaimer">以上食谱由 Kimi AI 生成，仅供参考，请根据个人情况调整。</p>
     </div>`;

@@ -188,14 +188,14 @@ function setApiModel(model) {
 
 // ==================== AI 建议持久化 ====================
 
+// ==================== AI 建议持久化（仅本地存储） ====================
+
 /**
- * 保存 AI 建议到 localStorage
+ * 保存 AI 建议到 localStorage（不上传 D1）
  * @param {string} dateStr — 日期字符串 YYYY-MM-DD
  * @param {object} adviceData — AI 返回的建议数据
  */
-async function saveAIAdvice(dateStr, adviceData) {
-  await saveAICacheDB('advice', dateStr, adviceData);
-  // Keep the old localStorage write as backup too
+function saveAIAdvice(dateStr, adviceData) {
   const wrapper = { data: adviceData, savedAt: Date.now() };
   localStorage.setItem(storageKey('cc_ai_advice_' + dateStr), JSON.stringify(wrapper));
 }
@@ -205,27 +205,21 @@ async function saveAIAdvice(dateStr, adviceData) {
  * @param {string} dateStr — 日期字符串 YYYY-MM-DD
  * @returns {object|null} 建议数据，无则返回 null
  */
-async function loadAIAdvice(dateStr) {
-  try {
-    const cached = await getAICacheDB('advice', dateStr);
-    if (cached) return cached;
-  } catch (e) { /* fall through to local */ }
-  // Fallback: direct localStorage read
+function loadAIAdvice(dateStr) {
   try {
     const raw = localStorage.getItem(storageKey('cc_ai_advice_' + dateStr));
     return raw ? JSON.parse(raw) : null;
   } catch (e) { return null; }
 }
 
-// ==================== 每日食谱持久化 ====================
+// ==================== 每日食谱持久化（仅本地存储） ====================
 
 /**
- * 保存每日食谱到 localStorage
+ * 保存每日食谱到 localStorage（不上传 D1）
  * @param {string} dateStr — 日期字符串 YYYY-MM-DD
  * @param {object} mealPlanData — AI 返回的食谱数据
  */
-async function saveMealPlan(dateStr, mealPlanData) {
-  await saveAICacheDB('mealplan', dateStr, mealPlanData);
+function saveMealPlan(dateStr, mealPlanData) {
   const wrapper = { data: mealPlanData, savedAt: Date.now() };
   localStorage.setItem(storageKey('cc_mealplan_' + dateStr), JSON.stringify(wrapper));
 }
@@ -235,11 +229,7 @@ async function saveMealPlan(dateStr, mealPlanData) {
  * @param {string} dateStr — 日期字符串 YYYY-MM-DD
  * @returns {object|null} 食谱数据，无则返回 null
  */
-async function loadMealPlan(dateStr) {
-  try {
-    const cached = await getAICacheDB('mealplan', dateStr);
-    if (cached) return cached;
-  } catch (e) { /* fall through to local */ }
+function loadMealPlan(dateStr) {
   try {
     const raw = localStorage.getItem(storageKey('cc_mealplan_' + dateStr));
     return raw ? JSON.parse(raw) : null;
@@ -551,7 +541,7 @@ async function getAIAdvice(dailyData, userProfile) {
  * @returns {Promise<{success: boolean, data?: object, error?: string}>}
  *   data: { breakfast, lunch, dinner, snacks, totalCalories, trainingPlan, dailyTips }
  */
-async function getDailyMealPlan(userProfile, dailyTarget) {
+async function getDailyMealPlan(userProfile, dailyTarget, todayIntakeContext) {
   if (!hasApiKey()) {
     return { success: false, error: 'NO_API_KEY' };
   }
@@ -563,10 +553,11 @@ async function getDailyMealPlan(userProfile, dailyTarget) {
 
 你需要根据用户的身体数据和热量目标，制定一份完整的一日计划。注意：
 1. 三餐+加餐的热量总和应接近目标热量
-2. 三大营养素比例合理（碳水50-65%，蛋白质10-20%，脂肪20-30%）
-3. 食物选择要适合中国饮食习惯，具体到食物名称和份量
-4. 训练计划要与用户目标匹配（减重偏有氧，增重偏力量）
-5. 每餐和训练都要有简短说明
+2. 如果用户已有当日摄入记录，请重点为「下一餐」提供具体建议，帮助用户平衡全天营养
+3. 三大营养素比例合理（碳水50-65%，蛋白质10-20%，脂肪20-30%）
+4. 食物选择要适合中国饮食习惯，具体到食物名称和份量
+5. 训练计划要与用户目标匹配（减重偏有氧，增重偏力量）
+6. 每餐和训练都要有简短说明
 
 请严格返回以下 JSON 格式（不要额外文字）：
 {
@@ -581,7 +572,8 @@ async function getDailyMealPlan(userProfile, dailyTarget) {
     "duration": "约XX分钟",
     "note": "训练说明（强度、注意事项）"
   },
-  "dailyTips": ["全天饮食小贴士1", "全天饮食小贴士2"]
+  "dailyTips": ["全天饮食小贴士1", "全天饮食小贴士2"],
+  "nextMealSuggestion": "根据用户今日已摄入情况，给出下一餐的具体建议（如没有摄入记录则写'从早餐开始规划'）"
 }`;
 
   const userMessage = `用户数据：
@@ -591,7 +583,7 @@ async function getDailyMealPlan(userProfile, dailyTarget) {
 - 体重：${userProfile.weight}kg
 - 身高：${userProfile.height}cm
 - 每日热量目标：${dailyTarget} kcal
-
+${todayIntakeContext || ''}
 请为这位用户规划今日的完整饮食和训练计划。`;
 
   try {
@@ -617,6 +609,7 @@ async function getDailyMealPlan(userProfile, dailyTarget) {
         totalCalories: result.totalCalories || 0,
         trainingPlan: result.trainingPlan || { type: '', exercises: [], duration: '', note: '' },
         dailyTips: result.dailyTips || [],
+        nextMealSuggestion: result.nextMealSuggestion || '',
       },
     };
   } catch (e) {
