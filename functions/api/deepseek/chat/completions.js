@@ -2,17 +2,18 @@
  * Cloudflare Pages Function — Kimi API 代理（月之暗面 Moonshot）
  * 路径: /api/deepseek/chat/completions（旧路径，向后兼容）
  *
- * 内置默认密钥转发请求到 Kimi API。
+ * 转发请求到 Kimi API。
  * 如前端传了 Authorization header（用户自有 Key），优先使用用户 Key。
  *
  * 密钥配置方式（三选一，按优先级排序）：
  *   1. 用户自带 Key — 前端设置页输入，通过 Authorization header 传递
- *   2. 内置默认 Key — 代码中直接配置（优先级低于用户 Key）
- *   3. Cloudflare Pages Secret — 运行 `npx wrangler secret put KIMI_API_KEY` 注入
+ *   2. Cloudflare Pages Secret — 运行 `npx wrangler pages secret put KIMI_API_KEY` 注入（推荐）
+ *   3. 本地开发 — 设置 KIMI_API_KEY 环境变量
+ *
+ * 注意：本文件不包含任何真实 API Key，请通过上述方式配置。
  */
 
 const UPSTREAM_URL = 'https://api.moonshot.cn/v1/chat/completions';
-const DEFAULT_API_KEY = 'sk-OaVZ418bWB5nmPB9KQBduwW1QEg6hiFcYehHIAHu53vMGRaL';
 
 export async function onRequest(context) {
   const { request, env } = context;
@@ -47,7 +48,7 @@ export async function onRequest(context) {
     // 密钥优先级：
     //   1. 前端传的 Authorization header（用户自己的 Key）
     //   2. Cloudflare Pages Secret — context.env.KIMI_API_KEY
-    //   3. 内置默认 Key（代码中配置）
+    //   3. 都没有 → 返回错误提示
     const authHeader = request.headers.get('Authorization');
     let apiKey = '';
 
@@ -55,14 +56,26 @@ export async function onRequest(context) {
       apiKey = authHeader.replace('Bearer ', '');
     }
 
-    // Cloudflare Pages: secrets 通过 context.env 或直接作为 env 绑定传入
+    // Cloudflare Pages: secrets 通过 context.env 传入
     if (!apiKey && env && env.KIMI_API_KEY) {
       apiKey = env.KIMI_API_KEY;
     }
 
-    // 内置默认 Key
     if (!apiKey) {
-      apiKey = DEFAULT_API_KEY;
+      return new Response(
+        JSON.stringify({
+          error: {
+            message: '未配置 API Key。请在设置页面输入您的 Kimi API Key，或由管理员运行 `npx wrangler pages secret put KIMI_API_KEY` 配置服务端密钥。\n获取地址：https://platform.moonshot.cn/console/api-keys',
+          },
+        }),
+        {
+          status: 401,
+          headers: {
+            'Content-Type': 'application/json',
+            'Access-Control-Allow-Origin': '*',
+          },
+        }
+      );
     }
 
     const proxyRequest = new Request(UPSTREAM_URL, {
