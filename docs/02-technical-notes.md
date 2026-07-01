@@ -6,7 +6,8 @@
 |----|------|------|
 | 前端框架 | 无框架，纯 HTML + CSS + JS | 无需构建工具，小白可维护 |
 | CSS 方案 | 原生 CSS（CSS 变量 + Flexbox + Grid） | 零依赖，移动端友好 |
-| 数据存储 | localStorage | 离线可用，无需后端 |
+| 数据存储 | Cloudflare D1（主） + localStorage（缓存） | 跨设备同步 + 离线可用 |
+| 后端服务 | Cloudflare Pages Functions | 边缘计算，低延迟 |
 | 图标 | Emoji / SVG 内嵌 | 不依赖图标库 |
 
 ## 项目结构
@@ -15,19 +16,31 @@
 热量计算器/
 ├── index.html              # 主页面（唯一页面，SPA 模式）
 ├── css/
-│   └── style.css           # 样式文件（~2200 行）
+│   └── style.css           # 样式文件
 ├── js/
 │   ├── app.js              # 应用入口，初始化与协调（3Tab导航 + 视图切换）
-│   ├── food-database.js    # 内置食物数据库（173 种食物，8 个分类）
-│   ├── auth.js             # 用户认证（注册/登录/会话/数据隔离）
+│   ├── food-database.js    # 内置食物数据库（293 种食物，8 个分类）
+│   ├── auth.js             # 用户认证（注册/登录/登出/会话管理/数据隔离）
+│   ├── db.js               # D1 数据访问层（API封装 + 离线缓存 + 同步队列）
 │   ├── api.js              # Kimi API 集成（食物估计 + AI建议 + 每日食谱）
 │   ├── settings.js         # 用户设置（BMR + 热量目标 + API Key + 代理模式）
 │   ├── custom-food.js      # 自定义食物 CRUD
 │   ├── dashboard.js        # 仪表盘渲染（环形进度条 + 营养素卡片 + 供能比例条）
 │   ├── advisor.js          # 科学建议引擎（规则引擎 + AI深度分析 + AI食谱计划）
 │   ├── history.js          # 历史记录管理（7 天统计 + 日期列表）
-├── functions/              # Cloudflare Pages Functions（服务端API代理）
-│   └── api/kimi/chat/completions.js  # Kimi API 代理（内置默认密钥）
+├── functions/              # Cloudflare Pages Functions（服务端API）
+│   ├── _shared/
+│   │   └── auth.js         # 公共鉴权函数（Bearer Token 验证 + CORS + 响应工具）
+│   ├── api/
+│   │   ├── auth.js         # 认证 API（注册/登录/登出/验证）
+│   │   ├── data/
+│   │   │   └── [[route]].js # 数据 CRUD API（记录/食物/设置/AI缓存/同步）
+│   │   ├── kimi/
+│   │   │   └── chat/completions.js  # Kimi API 代理（内置默认密钥）
+│   │   └── deepseek/
+│   │       └── chat/completions.js  # DeepSeek API 代理（向后兼容）
+│   └── proxy/
+│       └── [[path]].js      # 拦截 /proxy/* 路径（安全防护）
 ├── proxy/                  # 代理配置参考文件（非 Cloudflare 部署用）
 │   ├── nginx.conf
 │   ├── cloudflare-worker.js
@@ -37,6 +50,35 @@
 ├── development-logs/       # 开发日志
 └── CLAUDE.md               # 开发指引
 ```
+
+## 架构：D1 + localStorage 双轨制
+
+```
+浏览器 (Client)                         Cloudflare Edge
++------------------+                    +---------------------------+
+| localStorage     |  <-- 离线缓存       | D1 数据库 (SQLite)       |
++------------------+                    | - users (用户表)         |
+        ^                               | - sessions (会话表)      |
+        | 写入时同步更新                  | - food_records (饮食记录) |
++------------------+   fetch()   +------+ - custom_foods (自定义)   |
+| JS App           | ----------> | Functions /api/*                |
+| (db.js 数据层)    | <---------- | - /api/auth (登录/注册)        |
++------------------+  JSON       | - /api/data (CRUD + 同步)     |
+                                 +--------------------------------+
+```
+
+**策略：D1 为主，localStorage 为缓存。** 每条数据操作都先请求 D1，成功则更新本地缓存；网络失败则使用本地缓存，标记待同步。
+
+## 数据库表设计（D1）
+
+| 表名 | 用途 | 关键字段 |
+|------|------|---------|
+| `users` | 用户注册信息 | id, username, password_hash, salt |
+| `sessions` | 登录会话（Bearer Token） | token, user_id, expires_at |
+| `food_records` | 每日饮食记录 | id, user_id, record_date, food_name, calories, protein, fat, carbs |
+| `custom_foods` | 用户自定义食物 | id, user_id, name, cal, protein, fat, carbs |
+| `user_settings` | 用户设置 | user_id, settings_json |
+| `ai_cache` | AI 建议/食谱缓存 | user_id, cache_type, cache_date, data_json |
 
 ## 数据模型
 
@@ -59,12 +101,29 @@
 }
 ```
 
-### 摄入记录（localStorage）
+### 摄入记录
 
-键名：`cc_records_YYYY-MM-DD`（如 `cc_records_2026-06-29`）
+D1 存储使用 snake_case 字段，客户端通过 `normalizeRecord()` 统一转为 camelCase：
 
 ```js
-// 值为 JSON 数组，每条记录：
+// D1 存储格式（snake_case）：
+{
+  id: 'uniq_id',
+  food_id: 's01',
+  food_name: '米饭（熟）',
+  category: 'staple',
+  grams: 150,
+  serving_label: '1小碗',
+  calories: 174,
+  carbs: 38.85,
+  protein: 3.9,
+  fat: 0.45,
+  time: '08:30',
+  record_date: '2026-07-01',
+  user_id: 'u_xxx'
+}
+
+// 客户端使用格式（camelCase，由 normalizeRecord() 转换）：
 {
   id: 'uniq_id',
   foodId: 's01',
@@ -93,7 +152,7 @@ targets = {
 }
 ```
 
-### 用户设置（localStorage，键名 `cc_settings`）
+### 用户设置
 
 ```js
 {
@@ -123,24 +182,86 @@ targets = {
 
 ## 存储方案
 
-- 使用 localStorage 存储所有用户数据
+### D1 存储（云端）
+
+| 表名 | 同步方向 | 说明 |
+|------|----------|------|
+| `users` | 读写 | 用户注册信息，密码哈希+盐 |
+| `sessions` | 读写 | Bearer Token，30天过期 |
+| `food_records` | 双向同步 | 饮食记录，按 user_id + date 索引 |
+| `custom_foods` | 双向同步 | 用户自定义食物 |
+| `user_settings` | 双向同步 | 用户偏好设置 |
+| `ai_cache` | 仅上传（已废弃） | AI 缓存表现在仅存本地，不再上传 |
+
+### localStorage 存储（本地缓存）
+
 - 键名规范：`cc_` 前缀（Calorie Calculator）
 - 登录用户自动添加 `cc_{userId}_*` 前缀隔离数据
 
-| 键名格式 | 内容 | 说明 |
-|----------|------|------|
-| `cc_records_YYYY-MM-DD` | JSON 数组 | 每日摄入记录 |
-| `cc_settings` | JSON 对象 | 用户设置（目标/身体数据/热量） |
-| `cc_custom_foods` | JSON 数组 | 用户自定义食物 |
-| `cc_apikey_kimi` | string | Kimi API Key（可选） |
-| `cc_proxy_mode` | boolean | 代理模式开关 |
-| `cc_proxy_path` | string | 代理路径 |
-| `cc_ai_advice_YYYY-MM-DD` | JSON 对象 | AI 深度分析结果（按日期缓存） |
-| `cc_mealplan_YYYY-MM-DD` | JSON 对象 | AI 每日食谱计划（按日期缓存） |
+| 键名格式 | 内容 | 存储位置 | 说明 |
+|----------|------|----------|------|
+| `cc_records_YYYY-MM-DD` | JSON 数组 | D1 + 本地缓存 | 每日摄入记录 |
+| `cc_settings` | JSON 对象 | D1 + 本地缓存 | 用户设置 |
+| `cc_custom_foods` | JSON 数组 | D1 + 本地缓存 | 用户自定义食物 |
+| `cc_session` | JSON 对象 | 仅本地 | 当前登录会话 |
+| `cc_session_token` | string | 仅本地 | D1 Bearer Token |
+| `cc_users` | JSON 数组 | 仅本地 | 本地注册用户备份 |
+| `cc_apikey_kimi` | string | 仅本地 | Kimi API Key（不上传） |
+| `cc_proxy_mode` | boolean | 仅本地 | 代理模式开关 |
+| `cc_proxy_path` | string | 仅本地 | 代理路径 |
+| `cc_ai_advice_YYYY-MM-DD` | JSON 对象 | **仅本地** | AI 建议（不上传 D1） |
+| `cc_mealplan_YYYY-MM-DD` | JSON 对象 | **仅本地** | AI 食谱（不上传 D1） |
+| `cc_pending_sync` | JSON 数组 | 仅本地 | 离线写入队列 |
+| `cc_migrated_to_d1` | boolean | 仅本地 | 迁移标记 |
+| `cc_synced_to_d1` | boolean | 仅本地 | 同步标记 |
 
-- 历史模块通过扫描 `cc_records_*` 前缀的键来枚举所有有记录的日期
-- 历史统计只计算有记录的天数，无记录的日期不参与均值计算
-- AI 建议和食谱按日期缓存，切换日期自动加载对应缓存，避免重复消耗 API tokens
+> **重要**：AI 建议（`cc_ai_advice_*`）和 AI 食谱（`cc_mealplan_*`）仅存储在 localStorage，不会上传到 D1 云端数据库。
+
+## API 端点设计
+
+### 认证接口 — `POST /api/auth`
+
+| action | 说明 | 认证 |
+|--------|------|------|
+| `register` | 注册新用户 | 无需 |
+| `login` | 登录（明文密码，服务端哈希验证） | 无需 |
+| `logout` | 登出 | Bearer Token |
+| `validate` | 验证会话有效性 | Bearer Token |
+
+### 数据接口 — `/api/data/*`
+
+| 方法 | 路径 | 说明 | 认证 |
+|------|------|------|------|
+| GET | `/api/data/records?date=` | 获取某日饮食记录 | Bearer Token |
+| POST | `/api/data/records` | 添加饮食记录 | Bearer Token |
+| DELETE | `/api/data/records` | 删除饮食记录 | Bearer Token |
+| GET | `/api/data/records/summaries` | 历史汇总 | Bearer Token |
+| GET/POST/DELETE | `/api/data/custom-foods` | 自定义食物 CRUD | Bearer Token |
+| GET/PUT | `/api/data/settings` | 用户设置读写 | Bearer Token |
+| GET/POST | `/api/data/ai-cache` | AI 缓存（已废弃） | Bearer Token |
+| GET/POST | `/api/data/sync` | 全量同步 | Bearer Token |
+
+## 认证流程
+
+### 注册
+1. 客户端生成 SHA-256 + 随机盐哈希（本地）
+2. 发送到 `POST /api/auth`（`action: register`）
+3. 服务端存储到 D1 `users` 表
+4. 生成 session token 返回客户端
+5. 客户端同时保存本地会话 `cc_session`
+
+### 登录（跨设备支持）
+1. 客户端发送**明文密码**（HTTPS 加密传输）到 `POST /api/auth`（`action: login`）
+2. 服务端从 D1 读取用户存储的盐，做 SHA-256 哈希后与存储的哈希比对
+3. 验证成功 → 返回 session token
+4. 客户端调用 `syncFromServer()` 拉取最新数据
+5. 兼容旧客户端：也支持预哈希密码直接比对
+
+### 离线回退
+1. 远程 API 不可用 → 降级到本地 localStorage 密码验证
+2. 数据操作先更新 localStorage，异步推送 D1
+3. 推送失败 → 加入 `cc_pending_sync` 队列
+4. 恢复网络 → `processPendingSync()` 自动重放
 
 ## 热量标准参考
 
@@ -185,11 +306,23 @@ targets = {
 - 支持 Chrome、Edge、Firefox 最新版本
 - 支持移动端 Safari（iOS 14+）、Chrome Android
 
-## 多用户登录系统（Phase 10）
+## 多用户登录系统
 
 ### 用户存储
 
-键名：`cc_users`
+**D1 `users` 表（主存储）：**
+
+```sql
+CREATE TABLE users (
+  id TEXT PRIMARY KEY,
+  username TEXT UNIQUE NOT NULL,
+  password_hash TEXT NOT NULL,
+  salt TEXT NOT NULL,
+  created_at TEXT DEFAULT (datetime('now'))
+);
+```
+
+**localStorage 备份（`cc_users`）：**
 
 ```json
 [
@@ -205,26 +338,22 @@ targets = {
 
 ### 会话管理
 
-键名：`cc_session`
-
-```json
-{
-  "userId": "u_xxx",
-  "username": "用户名",
-  "loginTime": "ISO时间戳"
-}
-```
+- **D1 `sessions` 表**：token, user_id, expires_at（30天过期）
+- **本地 `cc_session`**：userId, username, loginTime
+- **本地 `cc_session_token`**：Bearer Token（双写 sessionStorage + localStorage）
 
 ### 数据隔离
 
-- 匿名模式：使用旧键名格式（`cc_records_YYYY-MM-DD`、`cc_settings`、`cc_custom_foods`）
 - 登录模式：在 `cc_` 后插入 `{userId}_`（如 `cc_u123_records_YYYY-MM-DD`）
 - 通过 `storageKey(baseKey)` 函数自动切换
+- 不再支持匿名模式（必须登录使用）
 
 ### 密码安全
 
-- 使用 Web Crypto API `SHA-256` + 随机盐（`crypto.getRandomValues`）做哈希
-- 定位是「防止数据混乱」而非金融级安全
+- 注册：客户端 Web Crypto API `SHA-256` + 随机盐 → 发送哈希到服务端
+- 登录：客户端发送明文密码（HTTPS）→ 服务端用存储的盐做 SHA-256 验证
+- 跨设备：客户端无需知道盐值，服务端统一验证
+- 定位是「防止数据混乱 + 跨设备同步」而非金融级安全
 
 ## Kimi API 集成（月之暗面 Moonshot）
 
@@ -249,21 +378,29 @@ targets = {
 
 ### AI 功能
 
-| 功能 | 函数 | 说明 |
-|------|------|------|
-| 食物估计 | `estimateFood(description)` | 自然语言描述食物，返回营养估计JSON |
-| 智能建议 | `getAIAdvice(dailyData, userProfile)` | 发送当日数据，返回个性化建议 |
-| 每日食谱 | `getDailyMealPlan(userProfile, dailyTarget)` | AI 规划全天饮食 + 训练计划 |
-| 连接测试 | `testApiConnection()` | 验证 API 连通性 |
+| 功能 | 函数 | 存储位置 | 说明 |
+|------|------|----------|------|
+| 食物估计 | `estimateFood(description)` | 无持久化 | 自然语言描述食物，返回营养估计JSON |
+| 智能建议 | `getAIAdvice(dailyData, userProfile)` | **仅 localStorage** | 发送当日数据，返回个性化建议 |
+| 每日食谱 | `getDailyMealPlan(userProfile, dailyTarget, todayIntakeContext)` | **仅 localStorage** | AI 规划全天饮食 + 训练计划 + 下一餐建议 |
+| 连接测试 | `testApiConnection()` | 无 | 验证 API 连通性 |
 
 ### 持久化缓存
 
-| 函数 | 存储键 | 说明 |
-|------|--------|------|
-| `saveAIAdvice(dateStr, data)` | `cc_ai_advice_YYYY-MM-DD` | 缓存 AI 建议 |
-| `loadAIAdvice(dateStr)` | 同上 | 读取缓存，无需重请求 |
-| `saveMealPlan(dateStr, data)` | `cc_mealplan_YYYY-MM-DD` | 缓存每日食谱 |
-| `loadMealPlan(dateStr)` | 同上 | 读取缓存 |
+| 函数 | 存储键 | 存储位置 | 说明 |
+|------|--------|----------|------|
+| `saveAIAdvice(dateStr, data)` | `cc_ai_advice_YYYY-MM-DD` | **仅 localStorage** | 缓存 AI 建议 |
+| `loadAIAdvice(dateStr)` | 同上 | **仅 localStorage** | 读取缓存 |
+| `saveMealPlan(dateStr, data)` | `cc_mealplan_YYYY-MM-DD` | **仅 localStorage** | 缓存每日食谱 |
+| `loadMealPlan(dateStr)` | 同上 | **仅 localStorage** | 读取缓存 |
+
+### AI 功能日期可见性
+
+| 日期 | AI 建议 | AI 食谱 Tab |
+|------|---------|------------|
+| 今天 | ✅ 显示 | ✅ 显示 |
+| 未来 | ❌ 隐藏 | ✅ 显示（可提前规划） |
+| 过去 | ❌ 隐藏 | ❌ 隐藏（Tab 隐藏，自动切回仪表盘） |
 
 ### 降级策略
 
@@ -275,8 +412,7 @@ targets = {
 
 ## 不依赖的项
 
-- 无后端服务
-- 无数据库
-- 可选第三方 API（Kimi，用户自备Key）
 - 无 npm 包
 - 无构建工具
+- 无第三方框架
+- Cloudflare D1 + Pages Functions（唯一后端依赖）

@@ -144,7 +144,7 @@
 
 ## Phase 10：多用户登录系统
 
-**目标**：实现用户名+密码注册/登录，数据按用户隔离，支持匿名使用。
+**目标**：实现用户名+密码注册/登录，数据按用户隔离。
 
 **产出**：
 - `js/auth.js` — 认证模块（注册/登录/登出/会话管理/数据隔离）
@@ -152,7 +152,7 @@
 - 所有 JS 文件的数据键隔离改造（`storageKey()` 函数）
 - 设置弹窗中的账号信息和登出按钮
 
-**验证标准**：注册→登录→数据隔离→登出→匿名使用→数据不丢失。
+**验证标准**：注册→登录→数据隔离→登出→数据不丢失。
 
 ---
 
@@ -170,17 +170,17 @@
 
 ---
 
-## Phase 12：AI 建议持久化 + 代理模式优化
+## Phase 12：AI 建议持久化 + 代理模式优化 → Kimi 迁移
 
-**目标**：AI 建议退出后不丢失，代理模式内置默认密钥实现零配置使用。
+**目标**：AI 建议退出后不丢失，代理模式内置默认密钥，迁移至 Kimi API。
 
 **产出**：
-- `js/api.js`：新增 `saveAIAdvice()` / `loadAIAdvice()` 持久化函数
+- `js/api.js`：新增 `saveAIAdvice()` / `loadAIAdvice()` 持久化函数（仅 localStorage）
 - `js/advisor.js`：`renderAdvice()` 自动恢复已保存建议；`requestAIAdvice()` 成功后自动保存
-- 移除火山方舟 API 相关代码，简化为单一 DeepSeek 供应商
+- 从 DeepSeek 迁移至 Kimi（月之暗面 Moonshot）API
 - 代理配置文件填入默认密钥（Nginx / Cloudflare Worker / Vercel）
 - 设置 UI 显示「默认密钥」状态（代理模式 + 无用户 Key 时）
-- Cloudflare Pages Functions API 代理（`functions/api/deepseek/chat/completions.js`）
+- Cloudflare Pages Functions API 代理
 - 安全措施：`functions/proxy/[[path]].js` 拦截 `/proxy/*` 访问
 
 **验证标准**：AI 分析后切换到其他 Tab 再回来，建议仍在；代理模式下无需填 Key 即可使用全部 AI 功能。
@@ -203,6 +203,76 @@
 
 ---
 
+## Phase 14：Cloudflare D1 数据库集成
+
+**目标**：将用户数据从纯 localStorage 迁移到 Cloudflare D1 数据库，实现跨设备数据同步。
+
+**产出**：
+- `functions/_shared/auth.js` — 公共鉴权模块（Bearer Token 验证 + CORS + 响应工具）
+- `functions/api/auth.js` — 认证 API（注册/登录/登出/验证会话）
+- `functions/api/data/[[route]].js` — 数据 CRUD API（记录/食物/设置/AI缓存/全量同步）
+- `js/db.js` — 客户端数据访问层
+  - API 封装（`apiRequest` / `apiGet` / `apiPost` / `apiPut` / `apiDelete`）
+  - Session Token 管理（双写 sessionStorage + localStorage）
+  - 离线缓存（localStorage 作为 D1 的本地镜像）
+  - 离线队列（`cc_pending_sync`，恢复网络后自动重放）
+  - 字段名规范化（`normalizeRecord()` — D1 snake_case → 客户端 camelCase）
+  - 全量同步（`syncFromServer()` / `migrateToServer()`）
+- D1 数据库 6 张表：`users`, `sessions`, `food_records`, `custom_foods`, `user_settings`, `ai_cache`
+- `wrangler.toml` — D1 数据库绑定配置
+
+**验证标准**：注册/登录对接 D1；跨设备登录数据同步；离线时自动降级到 localStorage。
+
+---
+
+## Phase 15：跨设备登录修复 + 字段映射 + UI 修复
+
+**目标**：修复跨设备登录失败、D1 数据字段显示 undefined、搜索栏文字重叠等问题。
+
+**产出**：
+- `js/auth.js`：`loginUser()` 改为发送明文密码（服务端用存储盐验证），支持跨设备登录
+- `functions/api/auth.js`：`handleLogin()` 新增 `serverHash()` 函数，服务端哈希验证
+- `js/db.js`：`loginRemote()` 发送 `password` 而非 `passwordHash`
+- `js/db.js`：`normalizeRecord()` 统一 snake_case → camelCase 转换
+- `css/style.css`：`.search-add-custom` 添加 `flex-wrap: wrap` 修复窄屏文字重叠
+
+**验证标准**：新设备可用用户名+密码登录；食物记录正常显示名称和份量；搜索栏底部文字不重叠。
+
+---
+
+## Phase 16：功能改进 — 强制登录 + AI 本地化 + 日期可见性
+
+**目标**：移除匿名登录、AI 数据仅存本地、AI 功能按日期显示/隐藏。
+
+**产出**：
+- `index.html`：删除 auth-skip 按钮，替换为静态提示文字
+- `js/app.js`：
+  - 删除 `onAuthSkip()` 函数和 `auth-skip` 事件绑定
+  - `showDashboardView()` / `switchTab()` / `refreshView()`：AI 建议仅当日显示、AI食谱Tab仅当天及未来显示
+- `js/api.js`：
+  - `saveAIAdvice()` / `loadAIAdvice()` / `saveMealPlan()` / `loadMealPlan()` 改为同步函数（仅操作 localStorage）
+  - `getDailyMealPlan()` 新增 `todayIntakeContext` 参数，支持下一餐建议
+- `js/advisor.js`：
+  - 移除 `loadAIAdvice()` / `saveAIAdvice()` / `loadMealPlan()` / `saveMealPlan()` 的 `await`
+  - `renderAdvice()`：AI 分析按钮仅当日显示
+  - `generateMealPlan()`：当日摄入记录传给 AI 生成下一餐建议
+  - `renderMealPlanResultHTML()`：新增下一餐建议卡片
+- `js/db.js`：`syncFromServer()` 和 `migrateToServer()` 移除 AI 缓存同步
+
+**验证标准**：登录界面无「跳过」按钮；AI 建议切换日期后隐藏；AI食谱Tab在历史日期隐藏；AI生成食谱包含基于当日摄入的下一餐建议。
+
+---
+
+## Bug Fix：advisor.js 重复 const 声明导致所有按钮失效
+
+**问题**：`js/advisor.js` — `generateMealPlan()` 函数内 `const dateStr` 在第 578 行和第 638 行重复声明，导致 `SyntaxError: Identifier 'dateStr' has already been declared`。advisor.js 解析失败 → `renderAdvice` 未定义 → `initApp()` 崩溃 → `bindEvents()` 未执行 → 所有按钮无反应。
+
+**修复**：删除第 638 行重复的 `const dateStr` 声明，复用第 578 行的变量（值相同）。
+
+**修复日期**：2026-07-01
+
+---
+
 ## 当前进度
 
 | Phase | 状态 | 完成日期 |
@@ -220,3 +290,7 @@
 | Phase 11 | ✅ 已完成 | 2026-06-29 |
 | Phase 12 | ✅ 已完成 | 2026-06-30 |
 | Phase 13 | ✅ 已完成 | 2026-06-30 |
+| Phase 14 | ✅ 已完成 | 2026-06-30 |
+| Phase 15 | ✅ 已完成 | 2026-07-01 |
+| Phase 16 | ✅ 已完成 | 2026-07-01 |
+| Bug Fix | ✅ 已修复 | 2026-07-01 |
