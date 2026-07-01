@@ -113,12 +113,14 @@ function openCustomFoodModal() {
   $('cf-fat').value = '';
 
   $('custom-food-modal').style.display = 'flex';
+  document.body.style.overflow = 'hidden';
   $('cf-name').focus();
 }
 
 /** 关闭自定义食物弹窗 */
 function closeCustomFoodModal() {
   $('custom-food-modal').style.display = 'none';
+  document.body.style.overflow = '';
 }
 
 /** 保存自定义食物 */

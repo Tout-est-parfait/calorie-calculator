@@ -120,6 +120,9 @@ let editingSettings = null;
 function openSettingsModal() {
   editingSettings = loadSettings();
 
+  // 锁定背景页面滚动
+  document.body.style.overflow = 'hidden';
+
   // 显示当前登录用户信息
   const user = getCurrentUser();
   const authSection = $('settings-auth');
@@ -213,10 +216,16 @@ function openSettingsModal() {
   $('settings-modal').style.display = 'flex';
 }
 
+/** 关闭弹窗的通用清理 */
+function dismissModal(modalId) {
+  $(modalId).style.display = 'none';
+  document.body.style.overflow = '';
+}
+
 /** 关闭设置弹窗（不保存） */
 function closeSettingsModal() {
   editingSettings = null;
-  $('settings-modal').style.display = 'none';
+  dismissModal('settings-modal');
 }
 
 /** 保存设置 */

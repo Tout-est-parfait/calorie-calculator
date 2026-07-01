@@ -446,6 +446,7 @@ function openAIEstimateModal() {
   $('btn-ai-submit').style.display = 'flex';
   $('btn-ai-confirm').style.display = 'none';
   $('ai-estimate-modal').style.display = 'flex';
+  document.body.style.overflow = 'hidden';
   $('ai-estimate-input').focus();
 }
 
@@ -453,6 +454,7 @@ function openAIEstimateModal() {
 function closeAIEstimateModal() {
   aiEstimateResult = null;
   $('ai-estimate-modal').style.display = 'none';
+  document.body.style.overflow = '';
 }
 
 /** 提交 AI 食物估计 */
@@ -609,6 +611,7 @@ function showServingModal(food) {
   $('serving-custom-grams').value = '';
 
   $('serving-modal').style.display = 'flex';
+  document.body.style.overflow = 'hidden';
 }
 
 function hideServingModal() {
@@ -616,6 +619,7 @@ function hideServingModal() {
   selectedServingGrams = 0;
   selectedServingIndex = -1;
   $('serving-modal').style.display = 'none';
+  document.body.style.overflow = '';
 }
 
 /** 确认添加食物到今日列表 */
