@@ -1780,11 +1780,16 @@ input {
 
 /* ---------- AI 每日食谱 ---------- */
 .mealplan-section {
-  padding: var(--space-md) var(--space-xl);
+  padding: 0;
+}
+
+.mealplan-section .section-title {
+  padding: 0;
+  margin-bottom: var(--space-md);
 }
 
 .mealplan-content {
-  margin-top: var(--space-md);
+  /* 内容区自适应，确保可以滚动 */
 }
 
 .mealplan-empty {
