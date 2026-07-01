@@ -634,8 +634,7 @@ async function generateMealPlan() {
 
   renderMealPlanResultHTML(resultEl, data);
 
-  // 保存到 localStorage
-  const dateStr = formatDate(state.currentDate);
+  // 保存到 localStorage（dateStr 已在函数开头声明）
   saveMealPlan(dateStr, data);
 }
 
