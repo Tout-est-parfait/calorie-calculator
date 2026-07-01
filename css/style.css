@@ -575,11 +575,23 @@ input {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: var(--space-sm);
+  flex-wrap: wrap;
+  gap: var(--space-xs) var(--space-sm);
   padding: var(--space-md);
   border-top: 1px solid var(--border-color);
   font-size: var(--font-size-sm);
   color: var(--text-secondary);
+  line-height: 1.6;
+}
+
+.search-add-custom .link-btn {
+  white-space: nowrap;
+  margin: 0 2px;
+}
+
+.search-add-divider {
+  color: var(--text-hint);
+  margin: 0 2px;
 }
 
 .link-btn {
@@ -1582,11 +1594,6 @@ input {
 }
 
 /* AI 估计入口链接 */
-.search-add-divider {
-  color: var(--text-hint);
-  margin: 0 2px;
-}
-
 .link-btn--ai {
   color: var(--color-primary-dark);
 }

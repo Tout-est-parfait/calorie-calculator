@@ -262,6 +262,34 @@ async function processPendingSync() {
 }
 
 // ═══════════════════════════════════════════════════
+// 记录字段名规范化
+// D1 返回 snake_case，客户端使用 camelCase，此函数统一转换
+// ═══════════════════════════════════════════════════
+
+/**
+ * 将 D1 返回的记录字段从 snake_case 转为 camelCase
+ * 兼容已经是 camelCase 的记录（localStorage缓存）
+ */
+function normalizeRecord(r) {
+  return {
+    id: r.id || '',
+    foodId: r.food_id || r.foodId || '',
+    foodName: r.food_name || r.foodName || '',
+    category: r.category || '',
+    grams: r.grams || 0,
+    servingLabel: r.serving_label || r.servingLabel || '',
+    calories: r.calories || 0,
+    carbs: r.carbs || 0,
+    protein: r.protein || 0,
+    fat: r.fat || 0,
+    time: r.time || '',
+    created_at: r.created_at || '',
+    record_date: r.record_date || '',
+    user_id: r.user_id || '',
+  };
+}
+
+// ═══════════════════════════════════════════════════
 // 饮食记录 CRUD
 // ═══════════════════════════════════════════════════
 
@@ -282,9 +310,11 @@ async function getRecordsDB(dateStr) {
   try {
     const result = await apiGet('records', { date: dateStr });
     if (result.records) {
+      // 将 D1 的 snake_case 字段转为 camelCase
+      const normalized = result.records.map(normalizeRecord);
       // 更新本地缓存
-      localStorage.setItem(cacheKey, JSON.stringify(result.records));
-      return result.records;
+      localStorage.setItem(cacheKey, JSON.stringify(normalized));
+      return normalized;
     }
     return [];
   } catch (e) {
@@ -612,7 +642,8 @@ async function syncFromServer() {
     if (result.records) {
       for (const [date, records] of Object.entries(result.records)) {
         const cacheKey = storageKey('cc_records_' + date);
-        localStorage.setItem(cacheKey, JSON.stringify(records));
+        const normalized = records.map(normalizeRecord);
+        localStorage.setItem(cacheKey, JSON.stringify(normalized));
       }
     }
 
