@@ -914,6 +914,9 @@ function hideSearchSection() {
   $('search-input').value = '';
   $('search-results').style.display = 'none';
 }
+
+/** 更新餐次选择提示条的显隐 */
+function updateMealSelectorUI() {
   const selector = $('meal-selector');
   const targetEl = $('meal-selector-target');
   if (!selector || !targetEl) return;
