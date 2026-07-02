@@ -650,6 +650,20 @@ async function generateMealPlan() {
   resultEl.style.display = 'block';
   btn.textContent = '🤖 重新生成食谱';
 
+  // 计算热量预算上下文
+  let budget = null;
+  if (isToday) {
+    try {
+      const todayRecords = await getTodayRecords();
+      const alreadyConsumed = todayRecords.reduce((s, r) => s + r.calories, 0);
+      budget = {
+        alreadyConsumed: alreadyConsumed,
+        remainingCal: dailyTarget - alreadyConsumed,
+        dailyTarget: dailyTarget,
+      };
+    } catch (e) { /* ignore */ }
+  }
+
   const data = result.data;
   if (data.rawText) {
     resultEl.innerHTML = `
@@ -664,7 +678,7 @@ async function generateMealPlan() {
     return;
   }
 
-  renderMealPlanResultHTML(resultEl, data);
+  renderMealPlanResultHTML(resultEl, data, budget);
 
   // 保存到 localStorage
   saveMealPlan(dateStr, data);
@@ -674,8 +688,9 @@ async function generateMealPlan() {
  * 渲染食谱结果 HTML
  * @param {HTMLElement} container
  * @param {object} data — { breakfast, lunch, dinner, snacks, totalCalories, trainingPlan, dailyTips }
+ * @param {object} [budget] — 热量预算上下文 { alreadyConsumed, remainingCal, dailyTarget }
  */
-function renderMealPlanResultHTML(container, data) {
+function renderMealPlanResultHTML(container, data, budget) {
   const mealIcons = {
     breakfast: '🌅',
     lunch: '☀️',
@@ -697,12 +712,13 @@ function renderMealPlanResultHTML(container, data) {
     if (!meal) return;
     const icon = mealIcons[mealKey];
     const label = mealLabels[mealKey];
+    const isSkipped = meal.foods && meal.foods.includes('已用过');
     mealsHTML += `
-      <div class="mealplan-meal-card">
+      <div class="mealplan-meal-card${isSkipped ? ' mealplan-meal-card--skipped' : ''}">
         <div class="mealplan-meal-header">
           <span class="mealplan-meal-icon">${icon}</span>
           <span class="mealplan-meal-title">${label}</span>
-          <span class="mealplan-meal-cal">${meal.calories || 0} kcal</span>
+          <span class="mealplan-meal-cal">${isSkipped ? '已用过' : (meal.calories || 0) + ' kcal'}</span>
         </div>
         <p class="mealplan-meal-foods">${meal.foods || ''}</p>
         ${meal.note ? `<p class="mealplan-meal-note">${meal.note}</p>` : ''}
@@ -734,17 +750,58 @@ function renderMealPlanResultHTML(container, data) {
     ? `<div class="ai-tips-list">${data.dailyTips.map(t => `<div class="ai-tip-item">💡 ${t}</div>`).join('')}</div>`
     : '';
 
-  // 总热量汇总
-  const totalCal = data.totalCalories
-    || ((data.breakfast?.calories || 0) + (data.lunch?.calories || 0) + (data.dinner?.calories || 0) + (data.snacks?.calories || 0));
+  // 总热量汇总 — 只计算非"已用过"的餐次
+  const remainingMealsCal = ['breakfast', 'lunch', 'dinner', 'snacks'].reduce((sum, key) => {
+    const meal = data[key];
+    if (!meal || !meal.foods) return sum;
+    if (meal.foods.includes('已用过')) return sum;
+    return sum + (meal.calories || 0);
+  }, 0);
+  const totalCal = data.totalCalories || remainingMealsCal;
+
+  // 热量预算条
+  let budgetHTML = '';
+  if (budget && budget.remainingCal !== undefined) {
+    const already = budget.alreadyConsumed || 0;
+    const remaining = budget.remainingCal;
+    const dailyTarget = budget.dailyTarget;
+    const plannedTotal = totalCal;
+    const diff = plannedTotal - remaining;
+    const diffText = diff > 0 ? `（比剩余预算多 ${diff} kcal）` : diff < 0 ? `（比剩余预算少 ${Math.abs(diff)} kcal）` : '（刚好匹配！）';
+    const diffClass = Math.abs(diff) <= 50 ? 'budget-match' : 'budget-mismatch';
+
+    budgetHTML = `
+      <div class="mealplan-budget">
+        <div class="mealplan-budget-row">
+          <div class="mealplan-budget-item">
+            <span class="mealplan-budget-label">已摄入</span>
+            <span class="mealplan-budget-value">${already} kcal</span>
+          </div>
+          <span class="mealplan-budget-plus">+</span>
+          <div class="mealplan-budget-item mealplan-budget-item--highlight">
+            <span class="mealplan-budget-label">食谱合计</span>
+            <span class="mealplan-budget-value">${plannedTotal} kcal</span>
+          </div>
+          <span class="mealplan-budget-eq">=</span>
+          <div class="mealplan-budget-item">
+            <span class="mealplan-budget-label">全天总计</span>
+            <span class="mealplan-budget-value">${already + plannedTotal} kcal</span>
+          </div>
+        </div>
+        <div class="mealplan-budget-target">
+          🎯 今日目标：${dailyTarget} kcal | 剩余预算：${remaining} kcal
+          <span class="mealplan-budget-diff ${diffClass}">${diffText}</span>
+        </div>
+      </div>`;
+  }
 
   container.innerHTML = `
     <div class="advice-card advice-card--ai">
       <div class="advice-card-header">
         <span class="advice-icon">🍽️</span>
         <span class="advice-title">AI 每日食谱计划</span>
-        <span class="mealplan-total">合计 ${totalCal} kcal</span>
       </div>
+      ${budgetHTML}
       <div class="mealplan-meals">
         ${mealsHTML}
       </div>

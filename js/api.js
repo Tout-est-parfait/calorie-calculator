@@ -560,8 +560,8 @@ async function getDailyMealPlan(userProfile, dailyTarget, todayIntakeContext, di
 
 你需要根据用户的身体数据和热量目标，制定一份饮食计划。核心原则：
 1. 如果用户已有当日摄入记录，重点为「剩余餐次」提供具体建议，帮助用户平衡全天营养
-2. 已经吃过的餐次不需要再规划（标记为"已用过"即可）
-3. 剩余餐次的热量总和 + 已摄入热量 ≈ 目标热量
+2. 已经吃过的餐次不需要再规划（标记为"已用过"，calories 填 0，foods 写"已用过"）
+3. **关键：剩余餐次的热量总和必须等于「剩余预算」（目标 - 已摄入），不是全天目标！**
 4. 三大营养素比例合理（碳水50-65%，蛋白质10-20%，脂肪20-30%）
 5. 食物选择要适合中国饮食习惯，具体到食物名称和份量
 6. 训练计划要与用户目标匹配（减重偏有氧，增重偏力量）
@@ -570,11 +570,11 @@ async function getDailyMealPlan(userProfile, dailyTarget, todayIntakeContext, di
 
 请严格返回以下 JSON 格式（不要额外文字）：
 {
-  "breakfast": {"foods": "早餐食物+份量，如已用过写'已用过'","calories": 数字, "note": "简短说明"},
-  "lunch": {"foods": "午餐食物+份量，如已用过写'已用过'","calories": 数字, "note": "简短说明"},
-  "dinner": {"foods": "晚餐食物+份量，如已用过写'已用过'","calories": 数字, "note": "简短说明"},
-  "snacks": {"foods": "加餐食物+份量，如无加餐写'无'","calories": 数字, "note": "简短说明"},
-  "totalCalories": 剩余餐次总热量数字（不含已摄入）,
+  "breakfast": {"foods": "早餐食物+份量，如已用过写'已用过'","calories": 数字（剩余餐次的热量）, "note": "简短说明"},
+  "lunch": {"foods": "午餐食物+份量，如已用过写'已用过'","calories": 数字（剩余餐次的热量）, "note": "简短说明"},
+  "dinner": {"foods": "晚餐食物+份量，如已用过写'已用过'","calories": 数字（剩余餐次的热量）, "note": "简短说明"},
+  "snacks": {"foods": "加餐食物+份量，如无加餐写'无'","calories": 数字（剩余餐次的热量）, "note": "简短说明"},
+  "totalCalories": 仅剩余餐次的热量总和（不含已标记为"已用过"的餐次），该值应接近用户剩余热量预算,
   "trainingPlan": {
     "type": "有氧训练/力量训练/混合训练/休息日",
     "exercises": ["具体动作1", "具体动作2", "具体动作3", "具体动作4"],
@@ -583,7 +583,9 @@ async function getDailyMealPlan(userProfile, dailyTarget, todayIntakeContext, di
   },
   "dailyTips": ["全天饮食小贴士1", "全天饮食小贴士2"],
   "nextMealSuggestion": "根据用户今日已摄入情况和剩余预算，给出下一餐的具体建议"
-}`;
+}
+
+⚠️ 重要：totalCalories 必须是「剩余未用餐次」的热量之和，不要包含已标记为"已用过"的餐次。已用过的餐次 calories 填 0。`;
 
   const userMessage = `用户数据：
 - 目标：${goalLabel}
@@ -595,7 +597,8 @@ async function getDailyMealPlan(userProfile, dailyTarget, todayIntakeContext, di
 ${restrictionNote}
 ${remainingMeals || ''}
 ${todayIntakeContext || ''}
-请为这位用户规划今日的饮食和训练计划。`;
+
+请注意：如果用户已有摄入记录，你的任务是规划「剩余餐次」，totalCalories 应等于剩余预算（目标 - 已摄入），不是全天目标值。请为这位用户规划今日的饮食和训练计划。`;
 
   try {
     const result = await callAI(

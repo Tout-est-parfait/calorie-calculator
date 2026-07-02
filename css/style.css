@@ -1792,17 +1792,17 @@ input {
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: var(--space-md);
+  gap: var(--space-lg);
 }
 
 .mealplan-section .section-title {
   padding: 0;
-  margin-bottom: 0;
+  margin-bottom: var(--space-xs);
 }
 
 /* 忌口偏好输入 */
 .mealplan-prefs {
-  margin: 0;
+  margin: 0 0 var(--space-sm) 0;
 }
 
 .mealplan-prefs-input {
@@ -1832,7 +1832,7 @@ input {
 
 /* 食谱区生成按钮（始终可见） */
 .mealplan-section > .ai-advice-btn {
-  margin: 0;
+  margin: 0 0 var(--space-sm) 0;
 }
 
 .mealplan-empty {
@@ -1959,6 +1959,101 @@ input {
 
 .mealplan-next-meal strong {
   color: var(--color-primary-dark);
+}
+
+/* 已跳过的餐次（已用过） */
+.mealplan-meal-card--skipped {
+  opacity: 0.5;
+  background: var(--bg-page);
+  border-color: var(--border-color);
+}
+
+.mealplan-meal-card--skipped .mealplan-meal-cal {
+  color: var(--text-hint);
+  background: var(--border-color);
+}
+
+/* 热量预算条 */
+.mealplan-budget {
+  background: linear-gradient(135deg, #f0f4ff 0%, #e8edf5 100%);
+  border-radius: var(--border-radius-sm);
+  padding: var(--space-md);
+  margin-bottom: var(--space-md);
+  border: 1px solid rgba(102, 126, 234, 0.15);
+}
+
+.mealplan-budget-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-sm);
+  flex-wrap: wrap;
+}
+
+.mealplan-budget-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  min-width: 64px;
+}
+
+.mealplan-budget-item--highlight {
+  background: rgba(102, 126, 234, 0.1);
+  border-radius: var(--border-radius-sm);
+  padding: var(--space-xs) var(--space-sm);
+}
+
+.mealplan-budget-label {
+  font-size: 10px;
+  color: var(--text-hint);
+  font-weight: 500;
+}
+
+.mealplan-budget-value {
+  font-size: var(--font-size-md);
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.mealplan-budget-item--highlight .mealplan-budget-value {
+  color: #667eea;
+}
+
+.mealplan-budget-plus,
+.mealplan-budget-eq {
+  font-size: var(--font-size-lg);
+  font-weight: 700;
+  color: var(--text-hint);
+}
+
+.mealplan-budget-target {
+  margin-top: var(--space-sm);
+  padding-top: var(--space-sm);
+  border-top: 1px solid rgba(102, 126, 234, 0.1);
+  text-align: center;
+  font-size: var(--font-size-xs);
+  color: var(--text-secondary);
+  line-height: 1.6;
+}
+
+.mealplan-budget-diff {
+  display: inline-block;
+  margin-left: var(--space-xs);
+  font-weight: 600;
+  padding: 1px 8px;
+  border-radius: 10px;
+  font-size: 11px;
+}
+
+.mealplan-budget-diff.budget-match {
+  background: #C8E6C9;
+  color: #2E7D32;
+}
+
+.mealplan-budget-diff.budget-mismatch {
+  background: var(--color-warning-light);
+  color: #E65100;
 }
 
 /* ---------- 弹窗 ---------- */
