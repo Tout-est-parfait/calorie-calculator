@@ -505,40 +505,67 @@ function renderAIAdviceResultHTML(container, data) {
 // ==================== AI 每日食谱计划 ====================
 
 /**
+ * 根据当前时间判断剩余需安排的餐次
+ * @returns {{ remainingLabel: string, remainingMeals: string }}
+ */
+function getRemainingMealsContext() {
+  const hour = new Date().getHours();
+  let remainingLabel = '';
+  let remainingMeals = '';
+
+  if (hour < 10) {
+    remainingLabel = '早餐、午餐、晚餐及加餐';
+    remainingMeals = '现在是早上，请规划今日全天的饮食：早餐、午餐、晚餐和加餐。';
+  } else if (hour < 14) {
+    remainingLabel = '午餐、晚餐及加餐';
+    remainingMeals = '早餐已过，请重点规划今日剩余餐次：午餐、晚餐和加餐。早餐标记为"已用过"。';
+  } else if (hour < 17) {
+    remainingLabel = '晚餐及加餐';
+    remainingMeals = '早餐和午餐已过，请重点规划今日剩余餐次：晚餐和加餐。早餐和午餐标记为"已用过"。';
+  } else {
+    remainingLabel = '加餐/明日早餐';
+    remainingMeals = '今日三餐已过，如有需要可规划轻加餐（水果、酸奶等），或给出明日早餐建议。早餐、午餐、晚餐标记为"已用过"。';
+  }
+
+  return { remainingLabel, remainingMeals };
+}
+
+/**
  * 渲染每日食谱面板
  * 初始化时调用，尝试从 localStorage 恢复当日食谱
+ * 生成按钮始终可见，不会因生成结果而隐藏
  */
 async function renderMealPlan() {
   const dateStr = formatDate(state.currentDate);
   const savedPlan = loadMealPlan(dateStr);
   const emptyEl = $('mealplan-empty');
   const resultEl = $('mealplan-result');
+  const genBtn = $('btn-generate-mealplan');
 
-  if (!emptyEl || !resultEl) return;
+  if (!emptyEl || !resultEl || !genBtn) return;
+
+  // 始终绑定生成按钮（每次重新绑定防止重复监听）
+  const newBtn = genBtn.cloneNode(true);
+  genBtn.parentNode.replaceChild(newBtn, genBtn);
+  newBtn.addEventListener('click', generateMealPlan);
 
   if (savedPlan) {
     // 有已保存的食谱，直接渲染
-    // loadMealPlan 返回包装对象 { data, savedAt }，需要解包
     emptyEl.style.display = 'none';
     resultEl.style.display = 'block';
     renderMealPlanResultHTML(resultEl, savedPlan.data || savedPlan);
+    newBtn.textContent = '🤖 重新生成食谱';
   } else {
     // 无食谱，显示空状态
     emptyEl.style.display = '';
     resultEl.style.display = 'none';
-
-    // 绑定生成按钮
-    const genBtn = $('btn-generate-mealplan');
-    if (genBtn) {
-      const newBtn = genBtn.cloneNode(true);
-      genBtn.parentNode.replaceChild(newBtn, genBtn);
-      newBtn.addEventListener('click', generateMealPlan);
-    }
+    newBtn.textContent = '🤖 生成今日食谱';
   }
 }
 
 /**
  * 生成每日食谱（按钮点击触发）
+ * 考虑：用户身体数据、今日已摄入、当前时间剩余餐次、忌口偏好
  */
 async function generateMealPlan() {
   const btn = $('btn-generate-mealplan');
@@ -549,20 +576,13 @@ async function generateMealPlan() {
 
   // 检查 API Key
   if (!hasApiKey()) {
-    emptyEl.innerHTML = `
-      <span class="empty-icon">🔑</span>
-      <p class="empty-text">请先在设置中配置 Kimi API Key</p>
-      <button class="ai-advice-btn" id="btn-generate-mealplan">🤖 生成食谱</button>`;
-    const newBtn = $('btn-generate-mealplan');
-    if (newBtn) {
-      newBtn.addEventListener('click', generateMealPlan);
-    }
+    showToast('请先在设置中配置 Kimi API Key 或启用代理模式', 'warning');
     return;
   }
 
   // 加载状态
   btn.disabled = true;
-  btn.textContent = '⏳ 生成中...';
+  btn.textContent = '⏳ AI 正在生成食谱...';
 
   // 获取用户数据和今日目标
   const userSettings = await getUserSettings();
@@ -575,50 +595,60 @@ async function generateMealPlan() {
   };
   const dailyTarget = await getCalorieTarget();
 
-  // 如果是当天，获取今日已摄入记录，为下一餐提供上下文
+  // 读取忌口偏好
+  const restrictionsInput = $('mealplan-restrictions');
+  const dietaryRestrictions = restrictionsInput ? restrictionsInput.value.trim() : '';
+
+  // 获取剩余餐次信息
+  const { remainingLabel, remainingMeals } = getRemainingMealsContext();
+
+  // 如果是当天，获取今日已摄入记录
   const dateStr = formatDate(state.currentDate);
   const isToday = isSameDay(state.currentDate, state.today);
   let todayIntakeContext = '';
+
   if (isToday) {
     try {
       const todayRecords = await getTodayRecords();
       if (todayRecords.length > 0) {
         const totalCal = todayRecords.reduce((s, r) => s + r.calories, 0);
+        const totalCarbs = todayRecords.reduce((s, r) => s + (r.carbs || 0), 0);
+        const totalProtein = todayRecords.reduce((s, r) => s + (r.protein || 0), 0);
+        const totalFat = todayRecords.reduce((s, r) => s + (r.fat || 0), 0);
+        const remainingCal = dailyTarget - totalCal;
+
         const foodList = todayRecords.map(r =>
           `${r.foodName}(${r.servingLabel || r.grams + 'g'}, ${r.calories}kcal)`
         ).join('、');
-        todayIntakeContext = `\n今日已摄入：${foodList}。已摄入热量：${totalCal}kcal（目标${dailyTarget}kcal，剩余${dailyTarget - totalCal}kcal）。请为用户的「下一餐」提供针对性建议。`;
+
+        todayIntakeContext = `
+今日已摄入记录：${foodList}
+已摄入汇总 — 热量：${totalCal}kcal，碳水：${totalCarbs}g，蛋白质：${totalProtein}g，脂肪：${totalFat}g
+目标热量：${dailyTarget}kcal，剩余预算：${remainingCal}kcal（剩余餐次的热量总和应接近此值）
+当前时间剩余需安排的餐次：${remainingLabel}`;
+      } else {
+        todayIntakeContext = `\n今日尚无摄入记录。当前时间剩余需安排的餐次：${remainingLabel}`;
       }
-    } catch (e) { /* ignore */ }
+    } catch (e) {
+      todayIntakeContext = `\n当前时间剩余需安排的餐次：${remainingLabel}`;
+    }
   }
 
-  const result = await getDailyMealPlan(userProfile, dailyTarget, todayIntakeContext);
+  const result = await getDailyMealPlan(userProfile, dailyTarget, todayIntakeContext, dietaryRestrictions, remainingMeals);
 
+  // 恢复按钮
   btn.disabled = false;
-  btn.textContent = '🤖 重新生成';
 
   if (!result.success) {
-    if (result.error === 'NO_API_KEY') {
-      emptyEl.innerHTML = `
-        <span class="empty-icon">🔑</span>
-        <p class="empty-text">请先在设置中配置 Kimi API Key</p>
-        <button class="ai-advice-btn" id="btn-generate-mealplan">🤖 生成食谱</button>`;
-    } else {
-      emptyEl.innerHTML = `
-        <span class="empty-icon">⚠️</span>
-        <p class="empty-text">生成失败：${result.error || '请稍后重试'}</p>
-        <button class="ai-advice-btn" id="btn-generate-mealplan">🤖 重试</button>`;
-    }
-    const newBtn = $('btn-generate-mealplan');
-    if (newBtn) {
-      newBtn.addEventListener('click', generateMealPlan);
-    }
+    showToast('生成失败：' + (result.error || '请稍后重试'), 'warning');
+    btn.textContent = '🤖 重试生成';
     return;
   }
 
-  // 隐藏空状态，显示结果
+  // 显示结果
   emptyEl.style.display = 'none';
   resultEl.style.display = 'block';
+  btn.textContent = '🤖 重新生成食谱';
 
   const data = result.data;
   if (data.rawText) {
@@ -630,12 +660,13 @@ async function generateMealPlan() {
         </div>
         <p class="advice-text">${data.rawText}</p>
       </div>`;
+    saveMealPlan(dateStr, data);
     return;
   }
 
   renderMealPlanResultHTML(resultEl, data);
 
-  // 保存到 localStorage（dateStr 已在函数开头声明）
+  // 保存到 localStorage
   saveMealPlan(dateStr, data);
 }
 

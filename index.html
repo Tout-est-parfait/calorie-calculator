@@ -177,6 +177,12 @@
 
       <!-- 食物搜索栏 -->
       <section class="search-section" id="search-section">
+        <!-- 首次使用引导 -->
+        <div class="onboarding-tip" id="onboarding-tip" style="display:none">
+          <span class="tip-icon">👆</span>
+          <span>搜索食物名称，开始记录饮食</span>
+          <span class="tip-dismiss" id="tip-dismiss">×</span>
+        </div>
         <div class="search-box">
           <span class="search-icon">🔍</span>
           <input
@@ -188,16 +194,16 @@
           >
           <button class="search-clear" id="search-clear" style="display:none">✕</button>
         </div>
-        <!-- 快捷入口：始终可见 -->
-        <div class="search-add-custom" id="search-add-custom">
-          <button class="link-btn" id="btn-add-custom">✏️ 自定义添加</button>
-          <span class="search-add-divider">|</span>
-          <button class="link-btn link-btn--ai" id="btn-ai-estimate">🤖 AI 智能估计</button>
-        </div>
         <!-- 搜索结果下拉 -->
         <div class="search-results" id="search-results" style="display:none">
           <div class="search-results-list" id="search-results-list">
             <!-- 动态填充搜索结果 -->
+          </div>
+          <div class="search-add-custom" id="search-add-custom">
+            <span>没找到？</span>
+            <button class="link-btn" id="btn-add-custom">自定义添加</button>
+            <span class="search-add-divider">|</span>
+            <button class="link-btn link-btn--ai" id="btn-ai-estimate">🤖 AI 智能估计</button>
           </div>
         </div>
       </section>
@@ -270,11 +276,27 @@
       <!-- ========== AI 每日食谱视图（独立 Tab） ========== -->
       <section class="mealplan-section" id="mealplan-section" style="display:none">
         <h3 class="section-title">🍽️ AI 每日食谱</h3>
+
+        <!-- 忌口偏好（可选） -->
+        <div class="mealplan-prefs">
+          <input
+            type="text"
+            class="mealplan-prefs-input"
+            id="mealplan-restrictions"
+            placeholder="🥘 忌口偏好（选填）：如不吃辣、不吃猪肉、不吃海鲜…"
+            maxlength="100"
+            autocomplete="off"
+          >
+        </div>
+
+        <!-- 生成按钮始终可见 -->
+        <button class="ai-advice-btn" id="btn-generate-mealplan">🤖 生成今日食谱</button>
+
+        <!-- 食谱内容区 -->
         <div class="mealplan-content" id="mealplan-content">
           <div class="mealplan-empty" id="mealplan-empty">
             <span class="empty-icon">🤖</span>
-            <p class="empty-text">点击生成今日 AI 定制食谱与训练计划</p>
-            <button class="ai-advice-btn" id="btn-generate-mealplan">🤖 生成食谱</button>
+            <p class="empty-text">点击上方按钮，AI 将根据您的身体数据、今日已摄入情况、当前时间，智能生成剩余餐次的饮食计划</p>
           </div>
           <div class="mealplan-result" id="mealplan-result" style="display:none"></div>
         </div>
@@ -462,49 +484,53 @@
     <!-- ========== 自定义食物弹窗 ========== -->
     <div class="modal-overlay" id="custom-food-modal" style="display:none">
       <div class="modal-content">
-        <h4 class="modal-title">✏️ 自定义食物</h4>
-        <p class="modal-desc">添加数据库中没有的食物</p>
+        <div class="modal-header">
+          <h4 class="modal-title">✏️ 自定义食物</h4>
+          <button class="modal-close" id="btn-cf-close" title="关闭">✕</button>
+        </div>
 
-        <div class="custom-food-form">
-          <div class="form-field">
-            <label class="form-label">食物名称 <span class="form-required">*</span></label>
-            <input type="text" class="form-input" id="cf-name" placeholder="如：蛋白粉、牛油果沙拉" maxlength="30">
-          </div>
-          <div class="form-field">
-            <label class="form-label">每 100g 热量 <span class="form-required">*</span></label>
-            <div class="form-input-row">
-              <input type="number" class="form-input" id="cf-cal" placeholder="如：200" min="0" max="900" inputmode="numeric">
-              <span class="form-input-unit">kcal</span>
-            </div>
-          </div>
-          <div class="form-row-3">
+        <div class="modal-body">
+          <p class="modal-desc">添加数据库中没有的食物，营养数据按每 100g 计量</p>
+
+          <div class="custom-food-form">
             <div class="form-field">
-              <label class="form-label">碳水</label>
+              <label class="form-label">食物名称 <span class="form-required">*</span></label>
+              <input type="text" class="form-input" id="cf-name" placeholder="如：蛋白粉、牛油果沙拉" maxlength="30">
+            </div>
+            <div class="form-field">
+              <label class="form-label">每 100g 热量 <span class="form-required">*</span></label>
+              <div class="form-input-row">
+                <input type="number" class="form-input" id="cf-cal" placeholder="如：200" min="0" max="900" inputmode="numeric">
+                <span class="form-input-unit">kcal</span>
+              </div>
+            </div>
+            <div class="form-field">
+              <label class="form-label">每 100g 碳水</label>
               <div class="form-input-row">
                 <input type="number" class="form-input" id="cf-carbs" placeholder="0" min="0" max="100" step="0.1" inputmode="decimal">
                 <span class="form-input-unit">g</span>
               </div>
             </div>
             <div class="form-field">
-              <label class="form-label">蛋白质</label>
+              <label class="form-label">每 100g 蛋白质</label>
               <div class="form-input-row">
                 <input type="number" class="form-input" id="cf-protein" placeholder="0" min="0" max="100" step="0.1" inputmode="decimal">
                 <span class="form-input-unit">g</span>
               </div>
             </div>
             <div class="form-field">
-              <label class="form-label">脂肪</label>
+              <label class="form-label">每 100g 脂肪</label>
               <div class="form-input-row">
                 <input type="number" class="form-input" id="cf-fat" placeholder="0" min="0" max="100" step="0.1" inputmode="decimal">
                 <span class="form-input-unit">g</span>
               </div>
             </div>
           </div>
-        </div>
 
-        <div class="modal-actions">
-          <button class="btn btn--secondary" id="btn-cf-cancel">取消</button>
-          <button class="btn btn--primary" id="btn-cf-save">添加食物</button>
+          <div class="modal-actions">
+            <button class="btn btn--secondary" id="btn-cf-cancel">取消</button>
+            <button class="btn btn--primary" id="btn-cf-save">添加食物</button>
+          </div>
         </div>
       </div>
     </div>
@@ -512,55 +538,62 @@
     <!-- ========== AI 智能估计弹窗 ========== -->
     <div class="modal-overlay" id="ai-estimate-modal" style="display:none">
       <div class="modal-content">
-        <h4 class="modal-title">🤖 AI 智能估计</h4>
-        <p class="modal-desc">用自然语言描述您吃的食物，AI 会自动估计热量和营养素</p>
-
-        <div class="ai-estimate-form">
-          <textarea
-            class="ai-estimate-input"
-            id="ai-estimate-input"
-            placeholder="例如：今天中午吃了一碗米饭（约150g）、一份青椒炒鸡蛋（约200g）、一小碗紫菜蛋花汤"
-            rows="3"
-            maxlength="200"
-          ></textarea>
-          <div class="ai-estimate-char-count">
-            <span id="ai-char-count">0</span>/200
-          </div>
+        <div class="modal-header">
+          <h4 class="modal-title">🤖 AI 智能估计</h4>
+          <button class="modal-close" id="btn-ai-close" title="关闭">✕</button>
         </div>
 
-        <!-- AI 估计结果 -->
-        <div class="ai-estimate-result" id="ai-estimate-result" style="display:none">
-          <div class="ai-result-header">
-            <span class="ai-result-food" id="ai-result-name"></span>
-            <span class="ai-result-confidence" id="ai-result-confidence"></span>
-          </div>
-          <div class="ai-result-nutrition">
-            <div class="ai-result-item">
-              <span class="ai-result-value" id="ai-result-cal">--</span>
-              <span class="ai-result-label">热量 kcal</span>
-            </div>
-            <div class="ai-result-item">
-              <span class="ai-result-value" id="ai-result-protein">--</span>
-              <span class="ai-result-label">蛋白质 g</span>
-            </div>
-            <div class="ai-result-item">
-              <span class="ai-result-value" id="ai-result-fat">--</span>
-              <span class="ai-result-label">脂肪 g</span>
-            </div>
-            <div class="ai-result-item">
-              <span class="ai-result-value" id="ai-result-carbs">--</span>
-              <span class="ai-result-label">碳水 g</span>
+        <div class="modal-body">
+          <p class="modal-desc">用自然语言描述您吃的食物，AI 会自动估计热量和营养素含量</p>
+          <p class="modal-desc-hint">💡 描述越详细（食物名称、份量、做法），估计越准确</p>
+
+          <div class="ai-estimate-form">
+            <textarea
+              class="ai-estimate-input"
+              id="ai-estimate-input"
+              placeholder="例如：今天中午吃了一碗米饭（约150g）、一份青椒炒鸡蛋（约200g）、一小碗紫菜蛋花汤"
+              rows="4"
+              maxlength="200"
+            ></textarea>
+            <div class="ai-estimate-char-count">
+              <span id="ai-char-count">0</span>/200
             </div>
           </div>
-          <p class="ai-result-note" id="ai-result-note"></p>
-        </div>
 
-        <div class="ai-estimate-error" id="ai-estimate-error" style="display:none"></div>
+          <!-- AI 估计结果 -->
+          <div class="ai-estimate-result" id="ai-estimate-result" style="display:none">
+            <div class="ai-result-header">
+              <span class="ai-result-food" id="ai-result-name"></span>
+              <span class="ai-result-confidence" id="ai-result-confidence"></span>
+            </div>
+            <div class="ai-result-nutrition">
+              <div class="ai-result-item">
+                <span class="ai-result-value" id="ai-result-cal">--</span>
+                <span class="ai-result-label">热量 kcal</span>
+              </div>
+              <div class="ai-result-item">
+                <span class="ai-result-value" id="ai-result-protein">--</span>
+                <span class="ai-result-label">蛋白质 g</span>
+              </div>
+              <div class="ai-result-item">
+                <span class="ai-result-value" id="ai-result-fat">--</span>
+                <span class="ai-result-label">脂肪 g</span>
+              </div>
+              <div class="ai-result-item">
+                <span class="ai-result-value" id="ai-result-carbs">--</span>
+                <span class="ai-result-label">碳水 g</span>
+              </div>
+            </div>
+            <p class="ai-result-note" id="ai-result-note"></p>
+          </div>
 
-        <div class="modal-actions">
-          <button class="btn btn--secondary" id="btn-ai-cancel">取消</button>
-          <button class="btn btn--primary" id="btn-ai-submit">开始估计</button>
-          <button class="btn btn--primary" id="btn-ai-confirm" style="display:none">确认添加</button>
+          <div class="ai-estimate-error" id="ai-estimate-error" style="display:none"></div>
+
+          <div class="modal-actions">
+            <button class="btn btn--secondary" id="btn-ai-cancel">取消</button>
+            <button class="btn btn--primary" id="btn-ai-submit">开始估计</button>
+            <button class="btn btn--primary" id="btn-ai-confirm" style="display:none">确认添加</button>
+          </div>
         </div>
       </div>
     </div>

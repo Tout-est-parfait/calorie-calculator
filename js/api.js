@@ -538,10 +538,13 @@ async function getAIAdvice(dailyData, userProfile) {
  * @param {object} userProfile — 用户身体数据
  *   { goal, gender, age, weight, height }
  * @param {number} dailyTarget — 每日热量目标（kcal）
+ * @param {string} todayIntakeContext — 今日已摄入上下文
+ * @param {string} dietaryRestrictions — 用户忌口偏好（可选）
+ * @param {string} remainingMeals — 剩余需安排的餐次描述
  * @returns {Promise<{success: boolean, data?: object, error?: string}>}
  *   data: { breakfast, lunch, dinner, snacks, totalCalories, trainingPlan, dailyTips }
  */
-async function getDailyMealPlan(userProfile, dailyTarget, todayIntakeContext) {
+async function getDailyMealPlan(userProfile, dailyTarget, todayIntakeContext, dietaryRestrictions, remainingMeals) {
   if (!hasApiKey()) {
     return { success: false, error: 'NO_API_KEY' };
   }
@@ -549,31 +552,37 @@ async function getDailyMealPlan(userProfile, dailyTarget, todayIntakeContext) {
   const goalMap = { lose: '减重', maintain: '保持体重', gain: '增重' };
   const goalLabel = goalMap[userProfile.goal] || '保持体重';
 
+  const restrictionNote = dietaryRestrictions
+    ? `\n⚠️ 用户忌口/偏好：${dietaryRestrictions}。请严格遵守，不要推荐用户不吃的东西。`
+    : '';
+
   const systemPrompt = `你是一位资深营养师和健身教练，专门为用户制定科学的一日饮食与训练计划。参考标准：《中国居民膳食指南（2022）》。
 
-你需要根据用户的身体数据和热量目标，制定一份完整的一日计划。注意：
-1. 三餐+加餐的热量总和应接近目标热量
-2. 如果用户已有当日摄入记录，请重点为「下一餐」提供具体建议，帮助用户平衡全天营养
-3. 三大营养素比例合理（碳水50-65%，蛋白质10-20%，脂肪20-30%）
-4. 食物选择要适合中国饮食习惯，具体到食物名称和份量
-5. 训练计划要与用户目标匹配（减重偏有氧，增重偏力量）
-6. 每餐和训练都要有简短说明
+你需要根据用户的身体数据和热量目标，制定一份饮食计划。核心原则：
+1. 如果用户已有当日摄入记录，重点为「剩余餐次」提供具体建议，帮助用户平衡全天营养
+2. 已经吃过的餐次不需要再规划（标记为"已用过"即可）
+3. 剩余餐次的热量总和 + 已摄入热量 ≈ 目标热量
+4. 三大营养素比例合理（碳水50-65%，蛋白质10-20%，脂肪20-30%）
+5. 食物选择要适合中国饮食习惯，具体到食物名称和份量
+6. 训练计划要与用户目标匹配（减重偏有氧，增重偏力量）
+7. 严格遵守用户的忌口/偏好要求
+8. 每餐和训练都要有简短说明
 
 请严格返回以下 JSON 格式（不要额外文字）：
 {
-  "breakfast": {"foods": "早餐食物+份量，如：燕麦粥一碗(约250g)、水煮蛋2个、牛奶200ml","calories": 数字, "note": "简短说明"},
-  "lunch": {"foods": "午餐食物+份量","calories": 数字, "note": "简短说明"},
-  "dinner": {"foods": "晚餐食物+份量","calories": 数字, "note": "简短说明"},
+  "breakfast": {"foods": "早餐食物+份量，如已用过写'已用过'","calories": 数字, "note": "简短说明"},
+  "lunch": {"foods": "午餐食物+份量，如已用过写'已用过'","calories": 数字, "note": "简短说明"},
+  "dinner": {"foods": "晚餐食物+份量，如已用过写'已用过'","calories": 数字, "note": "简短说明"},
   "snacks": {"foods": "加餐食物+份量，如无加餐写'无'","calories": 数字, "note": "简短说明"},
-  "totalCalories": 三餐加餐总热量数字,
+  "totalCalories": 剩余餐次总热量数字（不含已摄入）,
   "trainingPlan": {
-    "type": "有氧训练/力量训练/混合训练",
+    "type": "有氧训练/力量训练/混合训练/休息日",
     "exercises": ["具体动作1", "具体动作2", "具体动作3", "具体动作4"],
     "duration": "约XX分钟",
     "note": "训练说明（强度、注意事项）"
   },
   "dailyTips": ["全天饮食小贴士1", "全天饮食小贴士2"],
-  "nextMealSuggestion": "根据用户今日已摄入情况，给出下一餐的具体建议（如没有摄入记录则写'从早餐开始规划'）"
+  "nextMealSuggestion": "根据用户今日已摄入情况和剩余预算，给出下一餐的具体建议"
 }`;
 
   const userMessage = `用户数据：
@@ -583,8 +592,10 @@ async function getDailyMealPlan(userProfile, dailyTarget, todayIntakeContext) {
 - 体重：${userProfile.weight}kg
 - 身高：${userProfile.height}cm
 - 每日热量目标：${dailyTarget} kcal
+${restrictionNote}
+${remainingMeals || ''}
 ${todayIntakeContext || ''}
-请为这位用户规划今日的完整饮食和训练计划。`;
+请为这位用户规划今日的饮食和训练计划。`;
 
   try {
     const result = await callAI(

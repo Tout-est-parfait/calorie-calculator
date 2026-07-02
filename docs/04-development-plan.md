@@ -263,6 +263,27 @@
 
 ---
 
+## Phase 17：弹窗 UI 重构 + AI 每日食谱智能优化
+
+**目标**：
+1. 重构「自定义食物」弹窗：修复标签歧义、单位位置混乱、布局紧凑/文字重叠问题
+2. 重构「AI 智能估计」弹窗：修复描述与示例间距过小、按钮不对齐、布局紧凑问题
+3. 优化 AI 每日食谱：根据用户身体数据+已摄入+当前时间+忌口偏好智能生成剩余餐次计划，生成入口始终可见
+
+**修改文件**：
+- `index.html` — 两个弹窗 HTML 重构（header+body 结构、标签修正、三列→独立行、忌口输入、按钮外置）
+- `css/style.css` — 弹窗间距优化、新增提示样式、食谱区新样式
+- `js/app.js` — 绑定新关闭按钮事件
+- `js/advisor.js` — 新增 `getRemainingMealsContext()` 智能餐次判断；重写 `renderMealPlan()` 和 `generateMealPlan()`
+- `js/api.js` — `getDailyMealPlan()` 新增 `dietaryRestrictions` + `remainingMeals` 参数；prompt 增强
+
+**验证标准**：
+- [x] 自定义食物弹窗：标签显示"每 100g 碳水/蛋白质/脂肪"，单位统一在输入框外侧，各字段间距合理不重叠
+- [x] AI 估计弹窗：描述与输入区间距舒适，关闭按钮可用，按钮等宽
+- [x] AI 食谱：忌口输入框可用；根据当前时间生成剩余餐次；按钮始终可见可多次生成
+
+---
+
 ## Bug Fix：advisor.js 重复 const 声明导致所有按钮失效
 
 **问题**：`js/advisor.js` — `generateMealPlan()` 函数内 `const dateStr` 在第 578 行和第 638 行重复声明，导致 `SyntaxError: Identifier 'dateStr' has already been declared`。advisor.js 解析失败 → `renderAdvice` 未定义 → `initApp()` 崩溃 → `bindEvents()` 未执行 → 所有按钮无反应。
@@ -293,4 +314,5 @@
 | Phase 14 | ✅ 已完成 | 2026-06-30 |
 | Phase 15 | ✅ 已完成 | 2026-07-01 |
 | Phase 16 | ✅ 已完成 | 2026-07-01 |
+| Phase 17 | ✅ 已完成 | 2026-07-02 |
 | Bug Fix | ✅ 已修复 | 2026-07-01 |

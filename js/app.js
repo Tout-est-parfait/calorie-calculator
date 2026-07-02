@@ -839,6 +839,7 @@ function bindEvents() {
     openCustomFoodModal();
   });
   $('btn-cf-cancel').addEventListener('click', closeCustomFoodModal);
+  $('btn-cf-close').addEventListener('click', closeCustomFoodModal);
   $('btn-cf-save').addEventListener('click', async () => {
     await saveCustomFood();
     // 如果弹窗已关闭（保存成功），显示提示
@@ -876,6 +877,7 @@ function bindEvents() {
 
   // AI 估计弹窗事件
   $('btn-ai-cancel').addEventListener('click', closeAIEstimateModal);
+  $('btn-ai-close').addEventListener('click', closeAIEstimateModal);
   $('btn-ai-submit').addEventListener('click', submitAIEstimate);
   $('btn-ai-confirm').addEventListener('click', confirmAIEstimate);
   $('ai-estimate-modal').addEventListener('click', (e) => {
