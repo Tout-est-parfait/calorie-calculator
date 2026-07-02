@@ -458,8 +458,8 @@ input {
 }
 
 /* ---------- 搜索区域 ---------- */
-/* 全屏搜索弹窗 */
-.search-modal-overlay {
+/* 全屏搜索弹窗（需高于页面内容但低于其他模态弹窗） */
+.modal-overlay.search-modal-overlay {
   z-index: 200;
 }
 
@@ -519,14 +519,19 @@ input {
   flex-shrink: 0;
 }
 
-/* 搜索结果区域（可滚动） */
+/* 搜索结果区域（可滚动，覆盖旧 dropdown absolute 定位） */
 .search-modal-content .search-results {
+  position: static;
   flex: 1;
   overflow-y: auto;
   margin: 0 var(--space-lg);
   border-radius: var(--border-radius-md);
   background: var(--bg-card);
   box-shadow: var(--shadow-card);
+  max-height: none;
+  top: auto;
+  left: auto;
+  right: auto;
 }
 
 /* 快捷操作入口（始终可见，在搜索结果下方） */
