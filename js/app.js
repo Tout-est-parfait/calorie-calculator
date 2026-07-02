@@ -161,6 +161,18 @@ function bindAuthEvents() {
   // 匿名跳过已移除 — 必须登录才能使用
 }
 
+/** 生成客户端本地时间戳（YYYY-MM-DD HH:MM:SS） */
+function localDateTime() {
+  const now = new Date();
+  const y = now.getFullYear();
+  const mo = String(now.getMonth() + 1).padStart(2, '0');
+  const d = String(now.getDate()).padStart(2, '0');
+  const h = String(now.getHours()).padStart(2, '0');
+  const mi = String(now.getMinutes()).padStart(2, '0');
+  const s = String(now.getSeconds()).padStart(2, '0');
+  return `${y}-${mo}-${d} ${h}:${mi}:${s}`;
+}
+
 // ==================== 工具函数 ====================
 
 /** 格式化日期为 YYYY-MM-DD */
@@ -569,6 +581,7 @@ async function confirmAIEstimate() {
     protein: data.protein,
     fat: data.fat,
     time: new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }),
+    created_at: localDateTime(),
   };
 
   await addIntakeRecord(record);
@@ -668,6 +681,7 @@ async function confirmAddFood() {
     protein: nutrition.protein,
     fat: nutrition.fat,
     time: new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }),
+    created_at: localDateTime(),
   };
 
   // 添加到当日记录
