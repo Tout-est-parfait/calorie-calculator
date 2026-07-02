@@ -564,8 +564,22 @@ async function renderMealPlan() {
 }
 
 /**
+ * 计算非"已用过"餐次的热量总和
+ * @param {object} data — AI 返回的食谱数据
+ * @returns {number}
+ */
+function calcPlannedTotal(data) {
+  return ['breakfast', 'lunch', 'dinner', 'snacks'].reduce((sum, key) => {
+    const meal = data[key];
+    if (!meal || !meal.foods) return sum;
+    if (meal.foods.includes('已用过')) return sum;
+    return sum + (meal.calories || 0);
+  }, 0);
+}
+
+/**
  * 生成每日食谱（按钮点击触发）
- * 考虑：用户身体数据、今日已摄入、当前时间剩余餐次、忌口偏好
+ * 场景判断 + AI 生成 + 热量校验 + 自动重试
  */
 async function generateMealPlan() {
   const btn = $('btn-generate-mealplan');
@@ -584,7 +598,7 @@ async function generateMealPlan() {
   btn.disabled = true;
   btn.textContent = '⏳ AI 正在生成食谱...';
 
-  // 获取用户数据和今日目标
+  // ---- 收集所有上下文数据 ----
   const userSettings = await getUserSettings();
   const userProfile = {
     goal: userSettings.goal,
@@ -594,18 +608,18 @@ async function generateMealPlan() {
     height: userSettings.height,
   };
   const dailyTarget = await getCalorieTarget();
-
-  // 读取忌口偏好
   const restrictionsInput = $('mealplan-restrictions');
   const dietaryRestrictions = restrictionsInput ? restrictionsInput.value.trim() : '';
-
-  // 获取剩余餐次信息
   const { remainingLabel, remainingMeals } = getRemainingMealsContext();
-
-  // 如果是当天，获取今日已摄入记录
   const dateStr = formatDate(state.currentDate);
   const isToday = isSameDay(state.currentDate, state.today);
+
+  // ---- 获取今日摄入 + 场景判断 ----
+  let alreadyConsumed = 0;
   let todayIntakeContext = '';
+  let scenario = { type: 'normal', remaining: dailyTarget };
+  const SCENARIO_NEAR_LIMIT = 0.85;  // Q2: 85% 阈值
+  const CALORIE_TOLERANCE = 30;       // Q4: ±30 kcal
 
   if (isToday) {
     try {
@@ -615,54 +629,88 @@ async function generateMealPlan() {
         const totalCarbs = todayRecords.reduce((s, r) => s + (r.carbs || 0), 0);
         const totalProtein = todayRecords.reduce((s, r) => s + (r.protein || 0), 0);
         const totalFat = todayRecords.reduce((s, r) => s + (r.fat || 0), 0);
+        alreadyConsumed = totalCal;
         const remainingCal = dailyTarget - totalCal;
+        const ratio = totalCal / dailyTarget;
 
         const foodList = todayRecords.map(r =>
           `${r.foodName}(${r.servingLabel || r.grams + 'g'}, ${r.calories}kcal)`
         ).join('、');
 
+        // 场景判断
+        if (totalCal >= dailyTarget) {
+          // 场景 C：已超标
+          const excess = totalCal - dailyTarget;
+          scenario = {
+            type: 'exceeded',
+            remaining: 0,
+            excess: excess,
+            exerciseTarget: Math.round(excess * 1.1),  // Q1: 消耗超标 × 1.1
+          };
+        } else if (ratio >= SCENARIO_NEAR_LIMIT) {
+          // 场景 B：接近上限
+          scenario = { type: 'near_limit', remaining: remainingCal };
+        } else {
+          // 场景 A：正常规划
+          scenario = { type: 'normal', remaining: remainingCal };
+        }
+
         todayIntakeContext = `
 今日已摄入记录：${foodList}
 已摄入汇总 — 热量：${totalCal}kcal，碳水：${totalCarbs}g，蛋白质：${totalProtein}g，脂肪：${totalFat}g
-目标热量：${dailyTarget}kcal，剩余预算：${remainingCal}kcal（剩余餐次的热量总和应接近此值）
-当前时间剩余需安排的餐次：${remainingLabel}`;
+目标热量：${dailyTarget}kcal，剩余预算：${remainingCal}kcal
+当前时间剩余需安排的餐次：${remainingLabel}
+⚠️ 请严格按场景要求规划，totalCalories 必须精确等于剩余预算（${remainingCal}kcal），误差不超过±${CALORIE_TOLERANCE}kcal！`;
       } else {
-        todayIntakeContext = `\n今日尚无摄入记录。当前时间剩余需安排的餐次：${remainingLabel}`;
+        todayIntakeContext = `\n今日尚无摄入记录。剩余预算 = 全天目标 ${dailyTarget}kcal。当前时间剩余需安排的餐次：${remainingLabel}`;
+        scenario = { type: 'normal', remaining: dailyTarget };
       }
     } catch (e) {
       todayIntakeContext = `\n当前时间剩余需安排的餐次：${remainingLabel}`;
     }
   }
 
-  const result = await getDailyMealPlan(userProfile, dailyTarget, todayIntakeContext, dietaryRestrictions, remainingMeals);
+  // ---- 调用 AI（含自动重试） ----
+  let result = null;
+  let retryHint = '';
+  const MAX_ATTEMPTS = 2;
 
-  // 恢复按钮
+  for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+    result = await getDailyMealPlan(
+      userProfile, dailyTarget, todayIntakeContext,
+      dietaryRestrictions, remainingMeals, scenario, retryHint
+    );
+
+    if (!result.success || !result.data || result.data.rawText) break;
+
+    // 校验热量精度
+    const plannedTotal = calcPlannedTotal(result.data);
+    const targetCal = scenario.type === 'exceeded' ? 0 : scenario.remaining;
+    const deviation = Math.abs(plannedTotal - targetCal);
+
+    if (deviation <= CALORIE_TOLERANCE) break; // 合格！
+
+    if (attempt < MAX_ATTEMPTS - 1) {
+      // 需要重试
+      retryHint = `上次生成的食谱合计 ${plannedTotal}kcal，但剩余预算是 ${targetCal}kcal，相差 ${deviation}kcal。请重新规划，确保 totalCalories 精确等于 ${targetCal}kcal（±${CALORIE_TOLERANCE}kcal）。`;
+      btn.textContent = `⏳ 热量偏差 ${deviation}kcal，自动修正中...`;
+      console.log(`热量偏差 ${deviation}kcal，自动重试第 ${attempt + 1} 次`);
+    }
+  }
+
+  // ---- 恢复按钮 ----
   btn.disabled = false;
 
-  if (!result.success) {
-    showToast('生成失败：' + (result.error || '请稍后重试'), 'warning');
+  if (!result || !result.success) {
+    showToast('生成失败：' + ((result && result.error) || '请稍后重试'), 'warning');
     btn.textContent = '🤖 重试生成';
     return;
   }
 
-  // 显示结果
+  // ---- 显示结果 ----
   emptyEl.style.display = 'none';
   resultEl.style.display = 'block';
   btn.textContent = '🤖 重新生成食谱';
-
-  // 计算热量预算上下文
-  let budget = null;
-  if (isToday) {
-    try {
-      const todayRecords = await getTodayRecords();
-      const alreadyConsumed = todayRecords.reduce((s, r) => s + r.calories, 0);
-      budget = {
-        alreadyConsumed: alreadyConsumed,
-        remainingCal: dailyTarget - alreadyConsumed,
-        dailyTarget: dailyTarget,
-      };
-    } catch (e) { /* ignore */ }
-  }
 
   const data = result.data;
   if (data.rawText) {
@@ -677,6 +725,14 @@ async function generateMealPlan() {
     saveMealPlan(dateStr, data);
     return;
   }
+
+  // 构建增强版预算上下文（含场景标签）
+  const budget = {
+    alreadyConsumed: alreadyConsumed,
+    remainingCal: scenario.remaining,
+    dailyTarget: dailyTarget,
+    scenario: scenario,
+  };
 
   renderMealPlanResultHTML(resultEl, data, budget);
 
@@ -751,48 +807,105 @@ function renderMealPlanResultHTML(container, data, budget) {
     : '';
 
   // 总热量汇总 — 只计算非"已用过"的餐次
-  const remainingMealsCal = ['breakfast', 'lunch', 'dinner', 'snacks'].reduce((sum, key) => {
-    const meal = data[key];
-    if (!meal || !meal.foods) return sum;
-    if (meal.foods.includes('已用过')) return sum;
-    return sum + (meal.calories || 0);
-  }, 0);
-  const totalCal = data.totalCalories || remainingMealsCal;
+  const plannedTotal = calcPlannedTotal(data);
 
-  // 热量预算条
+  // 热量预算条（场景感知）
   let budgetHTML = '';
-  if (budget && budget.remainingCal !== undefined) {
+  if (budget) {
     const already = budget.alreadyConsumed || 0;
-    const remaining = budget.remainingCal;
     const dailyTarget = budget.dailyTarget;
-    const plannedTotal = totalCal;
-    const diff = plannedTotal - remaining;
-    const diffText = diff > 0 ? `（比剩余预算多 ${diff} kcal）` : diff < 0 ? `（比剩余预算少 ${Math.abs(diff)} kcal）` : '（刚好匹配！）';
-    const diffClass = Math.abs(diff) <= 50 ? 'budget-match' : 'budget-mismatch';
+    const scenario = budget.scenario || { type: 'normal', remaining: dailyTarget };
+    const remaining = scenario.remaining;
+    const deviation = plannedTotal - remaining;
 
-    budgetHTML = `
-      <div class="mealplan-budget">
-        <div class="mealplan-budget-row">
-          <div class="mealplan-budget-item">
-            <span class="mealplan-budget-label">已摄入</span>
-            <span class="mealplan-budget-value">${already} kcal</span>
+    if (scenario.type === 'exceeded') {
+      // 场景 C：已超标
+      const excess = scenario.excess || (already - dailyTarget);
+      const exerciseTarget = scenario.exerciseTarget || Math.round(excess * 1.1);
+      budgetHTML = `
+        <div class="mealplan-budget mealplan-budget--exceeded">
+          <div class="mealplan-budget-scenario">
+            <span class="budget-scenario-badge badge--exceeded">⚠️ 热量已超标</span>
           </div>
-          <span class="mealplan-budget-plus">+</span>
-          <div class="mealplan-budget-item mealplan-budget-item--highlight">
-            <span class="mealplan-budget-label">食谱合计</span>
-            <span class="mealplan-budget-value">${plannedTotal} kcal</span>
+          <div class="mealplan-budget-row">
+            <div class="mealplan-budget-item">
+              <span class="mealplan-budget-label">已摄入</span>
+              <span class="mealplan-budget-value mealplan-budget-value--over">${already} kcal</span>
+            </div>
+            <span class="mealplan-budget-plus">-</span>
+            <div class="mealplan-budget-item">
+              <span class="mealplan-budget-label">目标</span>
+              <span class="mealplan-budget-value">${dailyTarget} kcal</span>
+            </div>
+            <span class="mealplan-budget-eq">=</span>
+            <div class="mealplan-budget-item mealplan-budget-item--highlight">
+              <span class="mealplan-budget-label">超标</span>
+              <span class="mealplan-budget-value">+${excess} kcal</span>
+            </div>
           </div>
-          <span class="mealplan-budget-eq">=</span>
-          <div class="mealplan-budget-item">
-            <span class="mealplan-budget-label">全天总计</span>
-            <span class="mealplan-budget-value">${already + plannedTotal} kcal</span>
+          <div class="mealplan-budget-target">
+            🏃 运动消耗目标：<strong>${exerciseTarget} kcal</strong>（超标 ${excess} × 1.1，制造小幅缺口）
           </div>
-        </div>
-        <div class="mealplan-budget-target">
-          🎯 今日目标：${dailyTarget} kcal | 剩余预算：${remaining} kcal
-          <span class="mealplan-budget-diff ${diffClass}">${diffText}</span>
-        </div>
-      </div>`;
+        </div>`;
+    } else if (scenario.type === 'near_limit') {
+      // 场景 B：接近上限
+      const diffText = deviation > 0 ? `（比预算多 ${deviation} kcal）` : deviation < 0 ? `（比预算少 ${Math.abs(deviation)} kcal）` : '（刚好匹配！）';
+      const diffClass = Math.abs(deviation) <= 30 ? 'budget-match' : 'budget-mismatch';
+      budgetHTML = `
+        <div class="mealplan-budget mealplan-budget--near-limit">
+          <div class="mealplan-budget-scenario">
+            <span class="budget-scenario-badge badge--near-limit">⚡ 接近热量上限</span>
+            <span class="budget-scenario-hint">推荐高饱腹感、低热量食物</span>
+          </div>
+          <div class="mealplan-budget-row">
+            <div class="mealplan-budget-item">
+              <span class="mealplan-budget-label">已摄入</span>
+              <span class="mealplan-budget-value">${already} kcal</span>
+            </div>
+            <span class="mealplan-budget-plus">+</span>
+            <div class="mealplan-budget-item mealplan-budget-item--highlight">
+              <span class="mealplan-budget-label">食谱合计</span>
+              <span class="mealplan-budget-value">${plannedTotal} kcal</span>
+            </div>
+            <span class="mealplan-budget-eq">=</span>
+            <div class="mealplan-budget-item">
+              <span class="mealplan-budget-label">全天总计</span>
+              <span class="mealplan-budget-value">${already + plannedTotal} kcal</span>
+            </div>
+          </div>
+          <div class="mealplan-budget-target">
+            🎯 目标：${dailyTarget} kcal | 剩余预算：${remaining} kcal
+            <span class="mealplan-budget-diff ${diffClass}">${diffText}</span>
+          </div>
+        </div>`;
+    } else {
+      // 场景 A：正常规划
+      const diffText = deviation > 0 ? `（比预算多 ${deviation} kcal）` : deviation < 0 ? `（比预算少 ${Math.abs(deviation)} kcal）` : '（刚好匹配！）';
+      const diffClass = Math.abs(deviation) <= 30 ? 'budget-match' : 'budget-mismatch';
+      budgetHTML = `
+        <div class="mealplan-budget">
+          <div class="mealplan-budget-row">
+            <div class="mealplan-budget-item">
+              <span class="mealplan-budget-label">已摄入</span>
+              <span class="mealplan-budget-value">${already} kcal</span>
+            </div>
+            <span class="mealplan-budget-plus">+</span>
+            <div class="mealplan-budget-item mealplan-budget-item--highlight">
+              <span class="mealplan-budget-label">食谱合计</span>
+              <span class="mealplan-budget-value">${plannedTotal} kcal</span>
+            </div>
+            <span class="mealplan-budget-eq">=</span>
+            <div class="mealplan-budget-item">
+              <span class="mealplan-budget-label">全天总计</span>
+              <span class="mealplan-budget-value">${already + plannedTotal} kcal</span>
+            </div>
+          </div>
+          <div class="mealplan-budget-target">
+            🎯 目标：${dailyTarget} kcal | 剩余预算：${remaining} kcal
+            <span class="mealplan-budget-diff ${diffClass}">${diffText}</span>
+          </div>
+        </div>`;
+    }
   }
 
   container.innerHTML = `

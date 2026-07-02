@@ -2056,6 +2056,53 @@ input {
   color: #E65100;
 }
 
+/* 场景标签 */
+.mealplan-budget-scenario {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  margin-bottom: var(--space-sm);
+  flex-wrap: wrap;
+}
+
+.budget-scenario-badge {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 12px;
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+}
+
+.badge--exceeded {
+  background: var(--color-danger-light);
+  color: var(--color-danger);
+}
+
+.badge--near-limit {
+  background: var(--color-warning-light);
+  color: #E65100;
+}
+
+.budget-scenario-hint {
+  font-size: var(--font-size-xs);
+  color: var(--text-secondary);
+}
+
+/* 超标预算条 */
+.mealplan-budget--exceeded {
+  background: linear-gradient(135deg, #fff5f5 0%, #ffe8e8 100%);
+  border-color: rgba(244, 67, 54, 0.2);
+}
+
+.mealplan-budget--near-limit {
+  background: linear-gradient(135deg, #fffdf5 0%, #fff8e1 100%);
+  border-color: rgba(255, 152, 0, 0.2);
+}
+
+.mealplan-budget-value--over {
+  color: var(--color-danger) !important;
+}
+
 /* ---------- 弹窗 ---------- */
 .modal-overlay {
   position: fixed;

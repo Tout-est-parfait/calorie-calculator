@@ -541,10 +541,11 @@ async function getAIAdvice(dailyData, userProfile) {
  * @param {string} todayIntakeContext — 今日已摄入上下文
  * @param {string} dietaryRestrictions — 用户忌口偏好（可选）
  * @param {string} remainingMeals — 剩余需安排的餐次描述
+ * @param {object} scenario — 场景信息 { type: 'normal'|'near_limit'|'exceeded', remaining, excess, exerciseTarget }
+ * @param {string} retryHint — 重试时的修正提示（可选）
  * @returns {Promise<{success: boolean, data?: object, error?: string}>}
- *   data: { breakfast, lunch, dinner, snacks, totalCalories, trainingPlan, dailyTips }
  */
-async function getDailyMealPlan(userProfile, dailyTarget, todayIntakeContext, dietaryRestrictions, remainingMeals) {
+async function getDailyMealPlan(userProfile, dailyTarget, todayIntakeContext, dietaryRestrictions, remainingMeals, scenario, retryHint) {
   if (!hasApiKey()) {
     return { success: false, error: 'NO_API_KEY' };
   }
@@ -556,36 +557,83 @@ async function getDailyMealPlan(userProfile, dailyTarget, todayIntakeContext, di
     ? `\n⚠️ 用户忌口/偏好：${dietaryRestrictions}。请严格遵守，不要推荐用户不吃的东西。`
     : '';
 
-  const systemPrompt = `你是一位资深营养师和健身教练，专门为用户制定科学的一日饮食与训练计划。参考标准：《中国居民膳食指南（2022）》。
+  const scenarioInfo = scenario || { type: 'normal', remaining: dailyTarget };
 
-你需要根据用户的身体数据和热量目标，制定一份饮食计划。核心原则：
-1. 如果用户已有当日摄入记录，重点为「剩余餐次」提供具体建议，帮助用户平衡全天营养
-2. 已经吃过的餐次不需要再规划（标记为"已用过"，calories 填 0，foods 写"已用过"）
-3. **关键：剩余餐次的热量总和必须等于「剩余预算」（目标 - 已摄入），不是全天目标！**
-4. 三大营养素比例合理（碳水50-65%，蛋白质10-20%，脂肪20-30%）
-5. 食物选择要适合中国饮食习惯，具体到食物名称和份量
-6. 训练计划要与用户目标匹配（减重偏有氧，增重偏力量）
-7. 严格遵守用户的忌口/偏好要求
-8. 每餐和训练都要有简短说明
+  // 根据场景构建不同的核心指令
+  let scenarioInstruction = '';
+  let scenarioExample = '';
+
+  if (scenarioInfo.type === 'exceeded') {
+    scenarioInstruction = `
+🔥 用户今日已摄入超标！已摄入热量超过目标 ${scenarioInfo.excess || 0} kcal。
+你的任务：
+1. 所有正餐标记为"已用过"（calories=0, foods="已用过"）
+2. 仅推荐极低热量但高饱腹感的加餐食物（如：黄瓜一根约15kcal、小番茄10颗约30kcal、魔芋丝一碗约10kcal、无糖茶水0kcal），加餐总热量不超过50kcal
+3. 训练计划是核心：给出能消耗约 ${scenarioInfo.exerciseTarget || 0} kcal 的运动方案（比超标多10%以制造小幅缺口），包括具体动作、时长、强度
+4. nextMealSuggestion 中建议控制饮食+坚持运动`;
+    scenarioExample = `
+示例：用户目标2000kcal，已摄入2500kcal（超标500），运动目标消耗550kcal：
+{
+  "breakfast": {"foods": "已用过", "calories": 0, "note": ""},
+  "lunch": {"foods": "已用过", "calories": 0, "note": ""},
+  "dinner": {"foods": "已用过", "calories": 0, "note": ""},
+  "snacks": {"foods": "黄瓜一根(约15kcal)、小番茄5颗(约15kcal)", "calories": 30, "note": "极低热量，补充维生素和饱腹感"},
+  "totalCalories": 30,
+  "trainingPlan": {
+    "type": "有氧+力量混合训练",
+    "exercises": ["跑步40分钟(约400kcal)", "跳绳10分钟(约100kcal)", "平板支撑3组(约50kcal)"],
+    "duration": "约60分钟",
+    "note": "总消耗约550kcal，可抵消超标并制造小幅缺口"
+  },
+  ...
+}`;
+  } else if (scenarioInfo.type === 'near_limit') {
+    scenarioInstruction = `
+⚠️ 用户今日已摄入接近目标上限（剩余预算仅 ${scenarioInfo.remaining || 0} kcal）。
+你的任务：
+1. 已过的餐次标记为"已用过"
+2. 剩余餐次推荐高饱腹感、低热量的食物：如蔬菜汤、菌菇类、魔芋、清蒸鱼、鸡胸肉小块等
+3. 热量总和必须精确控制在 ${scenarioInfo.remaining || 0} kcal（允许±30kcal误差）
+4. 训练可安排轻度活动（散步、瑜伽等）`;
+  } else {
+    scenarioInstruction = `
+✅ 用户还有充足的剩余热量预算（${scenarioInfo.remaining || 0} kcal）。
+你的任务：
+1. 已过的餐次标记为"已用过"
+2. 剩余餐次合理分配，热量总和必须精确等于 ${scenarioInfo.remaining || 0} kcal（允许±30kcal误差，绝不能差超过30kcal！）
+3. 三大营养素比例合理（碳水50-65%，蛋白质10-20%，脂肪20-30%）
+4. 训练计划与用户目标匹配`;
+  }
+
+  const retryNote = retryHint ? `\n⚠️ 上次生成有问题：${retryHint} 请务必修正！` : '';
+
+  const systemPrompt = `你是一位资深营养师和健身教练，专门为用户制定科学的饮食与训练计划。参考标准：《中国居民膳食指南（2022）》。
+
+核心原则：
+1. 已经吃过的餐次标记为"已用过"即可，calories 填 0，foods 写"已用过"
+2. **剩余餐次的热量总和（totalCalories）必须精确等于用户剩余预算，误差不超过±30kcal**
+3. 食物选择适合中国饮食习惯，具体到食物名称和份量
+4. 严格遵守用户的忌口/偏好要求
+5. 每餐和训练都要有简短说明
+${scenarioInstruction}
+${scenarioExample}
 
 请严格返回以下 JSON 格式（不要额外文字）：
 {
-  "breakfast": {"foods": "早餐食物+份量，如已用过写'已用过'","calories": 数字（剩余餐次的热量）, "note": "简短说明"},
-  "lunch": {"foods": "午餐食物+份量，如已用过写'已用过'","calories": 数字（剩余餐次的热量）, "note": "简短说明"},
-  "dinner": {"foods": "晚餐食物+份量，如已用过写'已用过'","calories": 数字（剩余餐次的热量）, "note": "简短说明"},
-  "snacks": {"foods": "加餐食物+份量，如无加餐写'无'","calories": 数字（剩余餐次的热量）, "note": "简短说明"},
-  "totalCalories": 仅剩余餐次的热量总和（不含已标记为"已用过"的餐次），该值应接近用户剩余热量预算,
+  "breakfast": {"foods": "食物+份量，已用过写'已用过'","calories": 数字, "note": "说明"},
+  "lunch": {"foods": "食物+份量，已用过写'已用过'","calories": 数字, "note": "说明"},
+  "dinner": {"foods": "食物+份量，已用过写'已用过'","calories": 数字, "note": "说明"},
+  "snacks": {"foods": "食物+份量，无写'无'","calories": 数字, "note": "说明"},
+  "totalCalories": 剩余餐次热量总和（必须≈剩余预算，±30kcal内）,
   "trainingPlan": {
-    "type": "有氧训练/力量训练/混合训练/休息日",
-    "exercises": ["具体动作1", "具体动作2", "具体动作3", "具体动作4"],
+    "type": "有氧/力量/混合/休息日",
+    "exercises": ["动作1", "动作2", "动作3"],
     "duration": "约XX分钟",
-    "note": "训练说明（强度、注意事项）"
+    "note": "说明"
   },
-  "dailyTips": ["全天饮食小贴士1", "全天饮食小贴士2"],
-  "nextMealSuggestion": "根据用户今日已摄入情况和剩余预算，给出下一餐的具体建议"
-}
-
-⚠️ 重要：totalCalories 必须是「剩余未用餐次」的热量之和，不要包含已标记为"已用过"的餐次。已用过的餐次 calories 填 0。`;
+  "dailyTips": ["小贴士1", "小贴士2"],
+  "nextMealSuggestion": "下一餐具体建议"
+}`;
 
   const userMessage = `用户数据：
 - 目标：${goalLabel}
@@ -597,8 +645,8 @@ async function getDailyMealPlan(userProfile, dailyTarget, todayIntakeContext, di
 ${restrictionNote}
 ${remainingMeals || ''}
 ${todayIntakeContext || ''}
-
-请注意：如果用户已有摄入记录，你的任务是规划「剩余餐次」，totalCalories 应等于剩余预算（目标 - 已摄入），不是全天目标值。请为这位用户规划今日的饮食和训练计划。`;
+${retryNote}
+请为这位用户规划今日的饮食和训练计划。`;
 
   try {
     const result = await callAI(
@@ -606,7 +654,7 @@ ${todayIntakeContext || ''}
         { role: 'system', content: systemPrompt },
         { role: 'user', content: userMessage },
       ],
-      { maxTokens: 1200, temperature: 0.6 }
+      { maxTokens: 1200, temperature: 0.4 }
     );
 
     if (!result.breakfast && result.rawText) {
