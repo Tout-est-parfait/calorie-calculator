@@ -407,7 +407,7 @@ function showDashboardView() {
 /** 显示历史记录视图 */
 async function showHistoryView() {
   $('dashboard').style.display = 'none';
-  $('search-section').style.display = 'none';
+  hideSearchSection();
   $('intake-section').style.display = 'none';
   $('advice-section').style.display = 'none';
   $('history-view').style.display = 'flex';
@@ -422,7 +422,7 @@ async function showHistoryView() {
 /** 显示 AI 食谱视图 */
 async function showMealPlanView() {
   $('dashboard').style.display = 'none';
-  $('search-section').style.display = 'none';
+  hideSearchSection();
   $('intake-section').style.display = 'none';
   $('advice-section').style.display = 'none';
   $('history-view').style.display = 'none';
@@ -888,31 +888,41 @@ async function renderIntakeList() {
   updateMealSelectorUI();
 }
 
-/** 展开搜索框 */
+/** 展开全屏搜索弹窗 */
 function showSearchSection() {
-  const el = $('search-section');
-  if (!el) return;
-  const wasHidden = el.style.display === 'none' || !el.style.display;
-  el.style.display = 'block';
-  if (wasHidden) {
-    // 仅在从隐藏变为可见时播放滑入动画
-    el.style.animation = 'none';
-    el.offsetHeight; // 强制回流
-    el.style.animation = 'searchSlideIn 0.25s ease-out';
+  const modal = $('search-modal');
+  if (!modal) return;
+
+  // 更新标题和餐次提示
+  if (state.addingToMeal) {
+    const cfg = MEAL_CONFIG[state.addingToMeal];
+    $('search-modal-title').textContent = (cfg ? cfg.icon + ' 添加到' + cfg.label : '🔍 搜索食物');
+    $('search-modal-meal-target').textContent = (cfg ? cfg.icon + ' ' + cfg.label : '');
+    $('search-modal-meal').style.display = 'flex';
+  } else {
+    $('search-modal-title').textContent = '🔍 搜索食物';
+    $('search-modal-meal').style.display = 'none';
   }
-  setTimeout(() => $('search-input').focus(), 100);
+
+  modal.style.display = 'flex';
+  document.body.style.overflow = 'hidden';
+  setTimeout(() => $('search-input').focus(), 150);
 }
 
-/** 收起搜索框 */
+/** 收起全屏搜索弹窗 */
 function hideSearchSection() {
-  const el = $('search-section');
-  if (!el) return;
-  el.style.display = 'none';
+  const modal = $('search-modal');
+  if (!modal) return;
+  modal.style.display = 'none';
+  document.body.style.overflow = '';
   // 清空搜索状态
   clearSearch();
   state.searchQuery = '';
   $('search-input').value = '';
   $('search-results').style.display = 'none';
+  // 清除餐次目标
+  state.addingToMeal = null;
+  updateMealSelectorUI();
 }
 
 /** 更新餐次选择提示条的显隐 */
@@ -1037,11 +1047,10 @@ function bindEvents() {
   });
   $('search-clear').addEventListener('click', clearSearch);
 
-  // 点击搜索框外部关闭搜索结果
-  document.addEventListener('click', (e) => {
-    const searchSection = $('search-section');
-    if (!searchSection.contains(e.target)) {
-      $('search-results').style.display = 'none';
+  // 点击搜索弹窗遮罩关闭
+  $('search-modal').addEventListener('click', (e) => {
+    if (e.target === $('search-modal')) {
+      hideSearchSection();
     }
   });
 
@@ -1067,14 +1076,10 @@ function bindEvents() {
     });
   });
 
-  // 搜索框收起按钮
-  const collapseBtn = $('search-collapse');
-  if (collapseBtn) {
-    collapseBtn.addEventListener('click', () => {
-      state.addingToMeal = null;
-      updateMealSelectorUI();
-      hideSearchSection();
-    });
+  // 搜索弹窗关闭按钮
+  const searchCloseBtn = $('search-modal-close');
+  if (searchCloseBtn) {
+    searchCloseBtn.addEventListener('click', hideSearchSection);
   }
 
   // 餐次选择提示条 — 取消按钮

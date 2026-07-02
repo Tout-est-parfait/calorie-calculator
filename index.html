@@ -175,42 +175,7 @@
         </div>
       </section>
 
-      <!-- 食物搜索栏（默认隐藏，点击餐次"+"展开） -->
-      <section class="search-section" id="search-section" style="display:none">
-        <div class="search-section-header">
-          <span class="search-section-title">🔍 搜索食物</span>
-          <button class="search-section-collapse" id="search-collapse" title="收起搜索框">✕</button>
-        </div>
-        <!-- 首次使用引导 -->
-        <div class="onboarding-tip" id="onboarding-tip" style="display:none">
-          <span class="tip-icon">👆</span>
-          <span>搜索食物名称，开始记录饮食</span>
-          <span class="tip-dismiss" id="tip-dismiss">×</span>
-        </div>
-        <div class="search-box">
-          <span class="search-icon">🔍</span>
-          <input
-            type="text"
-            class="search-input"
-            id="search-input"
-            placeholder="搜索食物，如：米饭、鸡蛋、番茄炒蛋..."
-            autocomplete="off"
-          >
-          <button class="search-clear" id="search-clear" style="display:none">✕</button>
-        </div>
-        <!-- 搜索结果下拉 -->
-        <div class="search-results" id="search-results" style="display:none">
-          <div class="search-results-list" id="search-results-list">
-            <!-- 动态填充搜索结果 -->
-          </div>
-          <div class="search-add-custom" id="search-add-custom">
-            <span>没找到？</span>
-            <button class="link-btn" id="btn-add-custom">自定义添加</button>
-            <span class="search-add-divider">|</span>
-            <button class="link-btn link-btn--ai" id="btn-ai-estimate">🤖 AI 智能估计</button>
-          </div>
-        </div>
-      </section>
+      <!-- 食物搜索已移至全屏弹窗 #search-modal -->
 
       <!-- 今日摄入列表（按餐次分组） -->
       <section class="intake-section" id="intake-section">
@@ -670,6 +635,57 @@
           <button class="btn btn--secondary" id="btn-serving-cancel">取消</button>
           <button class="btn btn--primary" id="btn-serving-confirm">确认添加</button>
         </div>
+      </div>
+    </div>
+
+    <!-- ========== 全屏搜索弹窗（点击餐次"+"打开） ========== -->
+    <div class="modal-overlay search-modal-overlay" id="search-modal" style="display:none">
+      <div class="search-modal-content">
+        <div class="search-modal-header">
+          <span class="search-modal-title" id="search-modal-title">🔍 搜索食物</span>
+          <button class="modal-close" id="search-modal-close" title="关闭">✕</button>
+        </div>
+
+        <!-- 餐次目标提示 -->
+        <div class="search-modal-meal" id="search-modal-meal" style="display:none">
+          <span class="search-modal-meal-label">添加到：</span>
+          <span class="search-modal-meal-target" id="search-modal-meal-target"></span>
+        </div>
+
+        <!-- 搜索输入 -->
+        <div class="search-box">
+          <span class="search-icon">🔍</span>
+          <input
+            type="text"
+            class="search-input"
+            id="search-input"
+            placeholder="搜索食物，如：米饭、鸡蛋、番茄炒蛋..."
+            autocomplete="off"
+          >
+          <button class="search-clear" id="search-clear" style="display:none">✕</button>
+        </div>
+
+        <!-- 搜索结果列表 -->
+        <div class="search-results" id="search-results" style="display:none">
+          <div class="search-results-list" id="search-results-list">
+            <!-- 动态填充搜索结果 -->
+          </div>
+        </div>
+
+        <!-- 快捷操作入口（始终可见） -->
+        <div class="search-modal-actions" id="search-modal-actions">
+          <button class="search-modal-action-btn" id="btn-add-custom">
+            <span class="search-modal-action-icon">✏️</span>
+            <span>自定义添加</span>
+          </button>
+          <button class="search-modal-action-btn search-modal-action-btn--ai" id="btn-ai-estimate">
+            <span class="search-modal-action-icon">🤖</span>
+            <span>AI 智能估计</span>
+          </button>
+        </div>
+
+        <!-- 底部空白占位，防止结果被遮挡 -->
+        <div class="search-modal-bottom"></div>
       </div>
     </div>
 

@@ -458,46 +458,122 @@ input {
 }
 
 /* ---------- 搜索区域 ---------- */
-.search-section {
-  position: relative;
-  animation: searchSlideIn 0.25s ease-out;
+/* 全屏搜索弹窗 */
+.search-modal-overlay {
+  z-index: 200;
 }
 
-@keyframes searchSlideIn {
-  from { opacity: 0; transform: translateY(-8px); }
-  to   { opacity: 1; transform: translateY(0); }
+.search-modal-content {
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  max-height: none;
+  border-radius: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-page);
+  overflow: hidden;
 }
 
-.search-section-header {
+.search-modal-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: var(--space-sm);
+  padding: var(--space-lg);
+  padding-top: calc(var(--space-lg) + env(safe-area-inset-top, 0px));
+  background: var(--bg-card);
+  border-bottom: 1px solid var(--border-color);
+  flex-shrink: 0;
 }
 
-.search-section-title {
-  font-size: var(--font-size-sm);
-  font-weight: 600;
-  color: var(--text-secondary);
+.search-modal-title {
+  font-size: var(--font-size-lg);
+  font-weight: 700;
+  color: var(--text-primary);
 }
 
-.search-section-collapse {
-  width: 28px;
-  height: 28px;
-  border-radius: var(--border-radius-round);
+/* 餐次目标提示条 */
+.search-modal-meal {
   display: flex;
   align-items: center;
-  justify-content: center;
+  gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-lg);
+  background: var(--color-primary-light);
+  flex-shrink: 0;
+}
+
+.search-modal-meal-label {
   font-size: var(--font-size-sm);
   color: var(--text-secondary);
-  background: var(--bg-card);
-  border: 1px solid var(--border-color);
-  cursor: pointer;
-  transition: background var(--transition-fast), color var(--transition-fast);
 }
-.search-section-collapse:hover {
-  background: var(--color-danger-light);
-  color: var(--color-danger);
+
+.search-modal-meal-target {
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  color: var(--color-primary-dark);
+}
+
+/* 搜索弹窗内的搜索框（去卡片化，融入页面） */
+.search-modal-content .search-box {
+  margin: var(--space-md) var(--space-lg);
+  flex-shrink: 0;
+}
+
+/* 搜索结果区域（可滚动） */
+.search-modal-content .search-results {
+  flex: 1;
+  overflow-y: auto;
+  margin: 0 var(--space-lg);
+  border-radius: var(--border-radius-md);
+  background: var(--bg-card);
+  box-shadow: var(--shadow-card);
+}
+
+/* 快捷操作入口（始终可见，在搜索结果下方） */
+.search-modal-actions {
+  display: flex;
+  gap: var(--space-md);
+  padding: var(--space-lg);
+  flex-shrink: 0;
+  justify-content: center;
+}
+
+.search-modal-action-btn {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-md) var(--space-xl);
+  border-radius: var(--border-radius-md);
+  border: 2px solid var(--border-color);
+  background: var(--bg-card);
+  font-size: var(--font-size-md);
+  font-weight: 500;
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+.search-modal-action-btn:hover {
+  border-color: var(--color-primary);
+  background: var(--color-primary-light);
+}
+.search-modal-action-btn--ai {
+  border-color: var(--color-info);
+  color: var(--color-info);
+  background: var(--color-info-light);
+}
+.search-modal-action-btn--ai:hover {
+  border-color: var(--color-info);
+  background: #BBDEFB;
+}
+
+.search-modal-action-icon {
+  font-size: 20px;
+}
+
+/* 底部安全区占位 */
+.search-modal-bottom {
+  height: env(safe-area-inset-bottom, var(--space-md));
+  flex-shrink: 0;
 }
 
 .search-box {
