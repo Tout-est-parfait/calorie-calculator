@@ -12,6 +12,7 @@ const state = {
   activeTab: 'dashboard',         // 当前底部导航页: 'dashboard' | 'history'
   selectedFood: null,             // 当前选中待添加的食物
   searchQuery: '',                // 搜索输入
+  addingToMeal: null,             // 当前正在添加的目标餐次（null=自动推断）
 };
 
 // ==================== 初始化 ====================
@@ -39,6 +40,7 @@ async function initApp() {
   }
 
   await initDB();
+  await migrateMealField();  // 历史数据餐次迁移（仅执行一次）
 
   updateDateDisplay();
   await renderIntakeList();
@@ -171,6 +173,68 @@ function localDateTime() {
   const mi = String(now.getMinutes()).padStart(2, '0');
   const s = String(now.getSeconds()).padStart(2, '0');
   return `${y}-${mo}-${d} ${h}:${mi}:${s}`;
+}
+
+// ==================== 餐次定义 ====================
+
+const MEAL_CONFIG = {
+  breakfast: { icon: '🌅', label: '早餐', order: 1, range: [6, 10] },
+  lunch:     { icon: '☀️', label: '午餐', order: 2, range: [10, 14] },
+  dinner:    { icon: '🌙', label: '晚餐', order: 3, range: [14, 17] },
+  snacks:    { icon: '🍎', label: '加餐', order: 4, range: [17, 6] }, // 跨午夜
+};
+
+/** 根据时间字符串推断餐次（用于历史数据迁移） */
+function inferMealFromTime(timeStr) {
+  if (!timeStr) return 'snacks';
+  const hour = parseInt(timeStr.split(':')[0]);
+  if (isNaN(hour)) return 'snacks';
+  if (hour >= 6 && hour < 10) return 'breakfast';
+  if (hour >= 10 && hour < 14) return 'lunch';
+  if (hour >= 14 && hour < 17) return 'dinner';
+  return 'snacks';
+}
+
+/** 根据当前时间自动推断餐次 */
+function autoDetectMeal() {
+  const hour = new Date().getHours();
+  if (hour >= 6 && hour < 10) return 'breakfast';
+  if (hour >= 10 && hour < 14) return 'lunch';
+  if (hour >= 14 && hour < 17) return 'dinner';
+  return 'snacks';
+}
+
+/** 为所有历史记录补充 meal 字段（仅执行一次） */
+async function migrateMealField() {
+  const migratedKey = storageKey('cc_meal_migrated_v1');
+  if (localStorage.getItem(migratedKey)) return;
+
+  // 扫描 localStorage 中所有 cc_records_* 键
+  const prefix = storageKey('cc_records_');
+  const keys = [];
+  for (let i = 0; i < localStorage.length; i++) {
+    const k = localStorage.key(i);
+    if (k && k.startsWith(prefix)) keys.push(k);
+  }
+
+  let migrated = 0;
+  for (const key of keys) {
+    try {
+      const records = JSON.parse(localStorage.getItem(key) || '[]');
+      let changed = false;
+      for (const r of records) {
+        if (!r.meal) {
+          r.meal = inferMealFromTime(r.time);
+          changed = true;
+          migrated++;
+        }
+      }
+      if (changed) localStorage.setItem(key, JSON.stringify(records));
+    } catch (e) { /* ignore */ }
+  }
+
+  if (migrated > 0) console.log('餐次迁移完成：' + migrated + ' 条记录');
+  localStorage.setItem(migratedKey, '1');
 }
 
 // ==================== 工具函数 ====================
@@ -582,7 +646,11 @@ async function confirmAIEstimate() {
     fat: data.fat,
     time: new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }),
     created_at: localDateTime(),
+    meal: state.addingToMeal || autoDetectMeal(),
   };
+
+  // 添加完成后重置餐次选择
+  state.addingToMeal = null;
 
   await addIntakeRecord(record);
 
@@ -682,7 +750,11 @@ async function confirmAddFood() {
     fat: nutrition.fat,
     time: new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }),
     created_at: localDateTime(),
+    meal: state.addingToMeal || autoDetectMeal(),
   };
+
+  // 添加完成后重置餐次选择
+  state.addingToMeal = null;
 
   // 添加到当日记录
   await addIntakeRecord(record);
@@ -748,39 +820,161 @@ async function removeIntakeRecord(recordId) {
   await renderAdvice();
 }
 
-/** 渲染今日摄入列表 */
+/** 渲染今日摄入列表（按餐次分组） */
 async function renderIntakeList() {
   const records = await getTodayRecords();
-  const listEl = $('intake-list');
-  const emptyEl = $('intake-empty');
   const countEl = $('intake-count');
+  const emptyEl = $('intake-empty');
+  const blocksEl = $('meal-blocks');
 
   countEl.textContent = records.length + ' 项';
 
+  // 整体空状态
   if (records.length === 0) {
     emptyEl.style.display = 'flex';
-    listEl.style.display = 'none';
+    blocksEl.style.display = 'none';
+    updateMealSelectorUI();
     return;
   }
 
   emptyEl.style.display = 'none';
-  listEl.style.display = 'flex';
+  blocksEl.style.display = 'flex';
 
-  listEl.innerHTML = records.map(r => `
-    <li class="intake-item">
-      <div class="intake-item-info">
-        <div class="intake-item-name">${r.foodName}</div>
-        <div class="intake-item-detail">${r.servingLabel} · ${r.time}</div>
-      </div>
-      <span class="intake-item-calories">${r.calories} kcal</span>
-      <button class="intake-item-delete" data-id="${r.id}">🗑️</button>
-    </li>
-  `).join('');
+  // 按餐次分组
+  const meals = { breakfast: [], lunch: [], dinner: [], snacks: [] };
+  for (const r of records) {
+    const m = r.meal && meals[r.meal] ? r.meal : 'snacks';
+    meals[m].push(r);
+  }
+
+  // 渲染每个餐次区块
+  let totalCal = 0;
+  for (const [mealKey, mealRecords] of Object.entries(meals)) {
+    const listEl = $('intake-list-' + mealKey);
+    const emptyMealEl = $('meal-empty-' + mealKey);
+    const subtotalEl = $('meal-subtotal-' + mealKey);
+
+    const subtotal = mealRecords.reduce((s, r) => s + r.calories, 0);
+    totalCal += subtotal;
+    subtotalEl.textContent = subtotal > 0 ? subtotal + ' kcal' : '0 kcal';
+
+    if (mealRecords.length === 0) {
+      listEl.innerHTML = '';
+      listEl.style.display = 'none';
+      if (emptyMealEl) emptyMealEl.style.display = 'block';
+    } else {
+      if (emptyMealEl) emptyMealEl.style.display = 'none';
+      listEl.style.display = 'flex';
+      listEl.innerHTML = mealRecords.map(r => {
+        const mealInfo = MEAL_CONFIG[r.meal] || MEAL_CONFIG.snacks;
+        return `
+          <li class="intake-item">
+            <div class="intake-item-info">
+              <div class="intake-item-name">
+                ${r.foodName}
+                <span class="intake-item-meal" data-id="${r.id}" data-meal="${r.meal || 'snacks'}" title="点击切换餐次">${mealInfo.icon} ${mealInfo.label}</span>
+              </div>
+              <div class="intake-item-detail">${r.servingLabel} · ${r.time}</div>
+            </div>
+            <span class="intake-item-calories">${r.calories} kcal</span>
+            <button class="intake-item-delete" data-id="${r.id}">🗑️</button>
+          </li>`;
+      }).join('');
+    }
+  }
 
   // 绑定删除事件
-  listEl.querySelectorAll('.intake-item-delete').forEach(btn => {
+  document.querySelectorAll('.intake-item-delete').forEach(btn => {
     btn.addEventListener('click', () => removeIntakeRecord(btn.dataset.id));
   });
+
+  // 绑定餐次标签点击事件（移动记录）
+  document.querySelectorAll('.intake-item-meal').forEach(tag => {
+    tag.addEventListener('click', (e) => {
+      e.stopPropagation();
+      showMealMovePopup(tag, tag.dataset.id, tag.dataset.meal);
+    });
+  });
+
+  updateMealSelectorUI();
+}
+
+/** 更新餐次选择提示条的显隐 */
+function updateMealSelectorUI() {
+  const selector = $('meal-selector');
+  const targetEl = $('meal-selector-target');
+  if (!selector || !targetEl) return;
+
+  if (state.addingToMeal) {
+    const cfg = MEAL_CONFIG[state.addingToMeal];
+    targetEl.textContent = (cfg ? cfg.icon + ' ' + cfg.label : state.addingToMeal);
+    selector.style.display = 'flex';
+    // 高亮对应区块
+    document.querySelectorAll('.meal-block').forEach(b => {
+      b.classList.toggle('meal-block--active', b.dataset.meal === state.addingToMeal);
+    });
+  } else {
+    selector.style.display = 'none';
+    document.querySelectorAll('.meal-block').forEach(b => b.classList.remove('meal-block--active'));
+  }
+}
+
+/** 弹出餐次移动菜单 */
+function showMealMovePopup(anchorEl, recordId, currentMeal) {
+  // 移除已有弹窗
+  document.querySelectorAll('.meal-move-popup').forEach(p => p.remove());
+
+  const popup = document.createElement('div');
+  popup.className = 'meal-move-popup';
+
+  const otherMeals = Object.entries(MEAL_CONFIG).filter(([k]) => k !== currentMeal);
+  otherMeals.forEach(([key, cfg]) => {
+    const btn = document.createElement('button');
+    btn.textContent = cfg.icon + ' 移到' + cfg.label;
+    btn.addEventListener('click', async () => {
+      await moveRecordMeal(recordId, key);
+      popup.remove();
+    });
+    popup.appendChild(btn);
+  });
+
+  // 定位
+  const rect = anchorEl.getBoundingClientRect();
+  popup.style.position = 'fixed';
+  popup.style.top = (rect.bottom + 4) + 'px';
+  popup.style.left = Math.min(rect.left, window.innerWidth - 120) + 'px';
+
+  document.body.appendChild(popup);
+
+  // 点击外部关闭
+  const closeHandler = (e) => {
+    if (!popup.contains(e.target) && e.target !== anchorEl) {
+      popup.remove();
+      document.removeEventListener('click', closeHandler);
+    }
+  };
+  setTimeout(() => document.addEventListener('click', closeHandler), 0);
+}
+
+/** 将记录移动到另一个餐次 */
+async function moveRecordMeal(recordId, newMeal) {
+  const dateStr = formatDate(state.currentDate);
+  const records = await getTodayRecords();
+  const record = records.find(r => r.id === recordId);
+  if (!record) return;
+
+  record.meal = newMeal;
+  await saveTodayRecords(records);
+
+  // 同步到 D1：先删后加（更新 meal 字段）
+  try {
+    await deleteRecordDB(dateStr, recordId);
+    await addRecordDB(dateStr, record);
+  } catch (e) { /* ignore */ }
+
+  await renderIntakeList();
+  const cfg = MEAL_CONFIG[newMeal];
+  showToast('已移到' + (cfg ? cfg.label : newMeal), 'success');
 }
 
 // ==================== 仪表盘更新 ====================
@@ -845,6 +1039,26 @@ function bindEvents() {
       hideServingModal();
     }
   });
+
+  // 餐次"+"添加按钮
+  document.querySelectorAll('.meal-block-add').forEach(btn => {
+    btn.addEventListener('click', () => {
+      state.addingToMeal = btn.dataset.meal;
+      updateMealSelectorUI();
+      $('search-input').focus();
+      const cfg = MEAL_CONFIG[state.addingToMeal];
+      showToast('点击食物即可添加到' + (cfg ? cfg.label : ''), 'info');
+    });
+  });
+
+  // 餐次选择提示条 — 取消按钮
+  const mealClearBtn = $('meal-selector-clear');
+  if (mealClearBtn) {
+    mealClearBtn.addEventListener('click', () => {
+      state.addingToMeal = null;
+      updateMealSelectorUI();
+    });
+  }
 
   // 自定义食物弹窗
   $('btn-add-custom').addEventListener('click', (e) => {

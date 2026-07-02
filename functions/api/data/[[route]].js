@@ -181,14 +181,14 @@ async function addRecord(db, userId, body) {
   await db.prepare(
     `INSERT INTO food_records
      (id, user_id, record_date, food_id, food_name, category, grams, serving_label,
-      calories, carbs, protein, fat, time, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      calories, carbs, protein, fat, time, meal, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   ).bind(
     record.id, userId, date,
     record.foodId || '', record.foodName || '', record.category || '',
     record.grams || 0, record.servingLabel || '',
     record.calories || 0, record.carbs || 0, record.protein || 0, record.fat || 0,
-    record.time || '', record.created_at || new Date().toISOString()
+    record.time || '', record.meal || 'snacks', record.created_at || new Date().toISOString()
   ).run();
 
   return jsonResponse({ success: true, id: record.id });
@@ -363,14 +363,14 @@ async function syncUpload(db, userId, body) {
           await db.prepare(
             `INSERT OR REPLACE INTO food_records
              (id, user_id, record_date, food_id, food_name, category, grams, serving_label,
-              calories, carbs, protein, fat, time, created_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+              calories, carbs, protein, fat, time, meal, created_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
           ).bind(
             r.id, userId, date,
             r.foodId || '', r.foodName || '', r.category || '',
             r.grams || 0, r.servingLabel || '',
             r.calories || 0, r.carbs || 0, r.protein || 0, r.fat || 0,
-            r.time || '', r.created_at || new Date().toISOString()
+            r.time || '', r.meal || 'snacks', r.created_at || new Date().toISOString()
           ).run();
           results.records++;
         } catch (e) {

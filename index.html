@@ -208,21 +208,72 @@
         </div>
       </section>
 
-      <!-- 今日摄入列表 -->
+      <!-- 今日摄入列表（按餐次分组） -->
       <section class="intake-section" id="intake-section">
         <div class="section-header">
           <h3 class="section-title">今日饮食记录</h3>
           <span class="section-count" id="intake-count">0 项</span>
         </div>
-        <!-- 空状态 -->
+
+        <!-- 餐次选择提示条 -->
+        <div class="meal-selector" id="meal-selector" style="display:none">
+          <span class="meal-selector-tip">正在添加到：</span>
+          <span class="meal-selector-target" id="meal-selector-target"></span>
+          <button class="meal-selector-clear" id="meal-selector-clear">✕ 取消</button>
+        </div>
+
+        <!-- 四餐次区块 -->
+        <div class="meal-blocks" id="meal-blocks">
+          <div class="meal-block" data-meal="breakfast">
+            <div class="meal-block-header">
+              <span class="meal-block-icon">🌅</span>
+              <span class="meal-block-title">早餐</span>
+              <span class="meal-block-cal" id="meal-subtotal-breakfast">0 kcal</span>
+            </div>
+            <ul class="intake-list" id="intake-list-breakfast"></ul>
+            <div class="meal-block-empty" id="meal-empty-breakfast">暂无记录</div>
+            <button class="meal-block-add" data-meal="breakfast" title="添加早餐">+ 添加食物</button>
+          </div>
+
+          <div class="meal-block" data-meal="lunch">
+            <div class="meal-block-header">
+              <span class="meal-block-icon">☀️</span>
+              <span class="meal-block-title">午餐</span>
+              <span class="meal-block-cal" id="meal-subtotal-lunch">0 kcal</span>
+            </div>
+            <ul class="intake-list" id="intake-list-lunch"></ul>
+            <div class="meal-block-empty" id="meal-empty-lunch">暂无记录</div>
+            <button class="meal-block-add" data-meal="lunch" title="添加午餐">+ 添加食物</button>
+          </div>
+
+          <div class="meal-block" data-meal="dinner">
+            <div class="meal-block-header">
+              <span class="meal-block-icon">🌙</span>
+              <span class="meal-block-title">晚餐</span>
+              <span class="meal-block-cal" id="meal-subtotal-dinner">0 kcal</span>
+            </div>
+            <ul class="intake-list" id="intake-list-dinner"></ul>
+            <div class="meal-block-empty" id="meal-empty-dinner">暂无记录</div>
+            <button class="meal-block-add" data-meal="dinner" title="添加晚餐">+ 添加食物</button>
+          </div>
+
+          <div class="meal-block" data-meal="snacks">
+            <div class="meal-block-header">
+              <span class="meal-block-icon">🍎</span>
+              <span class="meal-block-title">加餐</span>
+              <span class="meal-block-cal" id="meal-subtotal-snacks">0 kcal</span>
+            </div>
+            <ul class="intake-list" id="intake-list-snacks"></ul>
+            <div class="meal-block-empty" id="meal-empty-snacks">暂无记录</div>
+            <button class="meal-block-add" data-meal="snacks" title="添加加餐">+ 添加食物</button>
+          </div>
+        </div>
+
+        <!-- 整体空状态（全部无记录时显示） -->
         <div class="empty-state" id="intake-empty">
           <span class="empty-icon">🍽️</span>
-          <p class="empty-text">还没有记录，搜索食物开始添加吧</p>
+          <p class="empty-text">还没有记录，点击餐次旁的"+"开始添加吧</p>
         </div>
-        <!-- 食物列表 -->
-        <ul class="intake-list" id="intake-list">
-          <!-- 动态填充 -->
-        </ul>
       </section>
 
       <!-- 科学建议卡片 -->

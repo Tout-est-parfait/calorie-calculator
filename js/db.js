@@ -283,6 +283,7 @@ function normalizeRecord(r) {
     protein: r.protein || 0,
     fat: r.fat || 0,
     time: r.time || '',
+    meal: r.meal || r.meal_type || 'snacks',
     created_at: r.created_at || '',
     record_date: r.record_date || '',
     user_id: r.user_id || '',

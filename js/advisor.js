@@ -505,29 +505,50 @@ function renderAIAdviceResultHTML(container, data) {
 // ==================== AI 每日食谱计划 ====================
 
 /**
- * 根据当前时间判断剩余需安排的餐次
- * @returns {{ remainingLabel: string, remainingMeals: string }}
+ * 根据当前时间 + 已记录的餐次，判断剩余需安排的餐次
+ * @param {Array} [records] — 今日已摄入记录（含 meal 字段）
+ * @returns {{ remainingLabel: string, remainingMeals: string, recordedMeals: string[] }}
  */
-function getRemainingMealsContext() {
+function getRemainingMealsContext(records) {
   const hour = new Date().getHours();
-  let remainingLabel = '';
-  let remainingMeals = '';
+  const MEAL_ORDER = ['breakfast', 'lunch', 'dinner', 'snacks'];
+  const MEAL_NAMES = { breakfast: '早餐', lunch: '午餐', dinner: '晚餐', snacks: '加餐' };
 
-  if (hour < 10) {
-    remainingLabel = '早餐、午餐、晚餐及加餐';
-    remainingMeals = '现在是早上，请规划今日全天的饮食：早餐、午餐、晚餐和加餐。';
-  } else if (hour < 14) {
-    remainingLabel = '午餐、晚餐及加餐';
-    remainingMeals = '早餐已过，请重点规划今日剩余餐次：午餐、晚餐和加餐。早餐标记为"已用过"。';
-  } else if (hour < 17) {
-    remainingLabel = '晚餐及加餐';
-    remainingMeals = '早餐和午餐已过，请重点规划今日剩余餐次：晚餐和加餐。早餐和午餐标记为"已用过"。';
-  } else {
-    remainingLabel = '加餐/明日早餐';
-    remainingMeals = '今日三餐已过，如有需要可规划轻加餐（水果、酸奶等），或给出明日早餐建议。早餐、午餐、晚餐标记为"已用过"。';
+  // 找出用户已经记录了食物的餐次
+  const recordedMeals = new Set();
+  if (records && records.length > 0) {
+    for (const r of records) {
+      if (r.meal) recordedMeals.add(r.meal);
+    }
   }
 
-  return { remainingLabel, remainingMeals };
+  // 同时考虑当前时间：已过的餐次即使没记录也应该标记
+  const pastMeals = new Set();
+  if (hour >= 10) pastMeals.add('breakfast');
+  if (hour >= 14) pastMeals.add('lunch');
+  if (hour >= 17) pastMeals.add('dinner');
+
+  // 合并：已记录 + 已过时间 = 都视为已处理
+  const doneMeals = new Set([...recordedMeals, ...pastMeals]);
+  const remaining = MEAL_ORDER.filter(m => !doneMeals.has(m));
+
+  // 构建提示文本
+  const doneList = [...doneMeals].map(m => MEAL_NAMES[m] || m);
+  const remainingList = remaining.map(m => MEAL_NAMES[m] || m);
+
+  let remainingLabel = remainingList.join('、') || '无（所有餐次已安排）';
+  let remainingMeals = '';
+
+  if (doneList.length > 0) {
+    remainingMeals += `用户已记录或有安排的餐次：${doneList.join('、')}。这些餐次请标记为"已用过"，calories填0，foods写"已用过"。\n`;
+  }
+  if (remainingList.length > 0) {
+    remainingMeals += `需要规划的剩余餐次：${remainingList.join('、')}。请为这些餐次生成具体的饮食计划。`;
+  } else {
+    remainingMeals += '所有餐次已覆盖，可给出明日早餐建议或加餐建议。';
+  }
+
+  return { remainingLabel, remainingMeals, recordedMeals: [...doneMeals] };
 }
 
 /**
@@ -610,7 +631,6 @@ async function generateMealPlan() {
   const dailyTarget = await getCalorieTarget();
   const restrictionsInput = $('mealplan-restrictions');
   const dietaryRestrictions = restrictionsInput ? restrictionsInput.value.trim() : '';
-  const { remainingLabel, remainingMeals } = getRemainingMealsContext();
   const dateStr = formatDate(state.currentDate);
   const isToday = isSameDay(state.currentDate, state.today);
 
@@ -618,12 +638,20 @@ async function generateMealPlan() {
   let alreadyConsumed = 0;
   let todayIntakeContext = '';
   let scenario = { type: 'normal', remaining: dailyTarget };
-  const SCENARIO_NEAR_LIMIT = 0.85;  // Q2: 85% 阈值
-  const CALORIE_TOLERANCE = 30;       // Q4: ±30 kcal
+  const SCENARIO_NEAR_LIMIT = 0.85;
+  const CALORIE_TOLERANCE = 30;
+  let todayRecords = [];
+  let remainingMeals = '请规划今日全天饮食：早餐、午餐、晚餐和加餐。';
 
   if (isToday) {
     try {
-      const todayRecords = await getTodayRecords();
+      todayRecords = await getTodayRecords();
+
+      // 根据已记录的餐次，智能判断剩余餐次
+      const ctx = getRemainingMealsContext(todayRecords);
+      const remainingLabel = ctx.remainingLabel;
+      remainingMeals = ctx.remainingMeals;
+
       if (todayRecords.length > 0) {
         const totalCal = todayRecords.reduce((s, r) => s + r.calories, 0);
         const totalCarbs = todayRecords.reduce((s, r) => s + (r.carbs || 0), 0);
