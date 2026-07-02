@@ -177,12 +177,6 @@
 
       <!-- 食物搜索栏 -->
       <section class="search-section" id="search-section">
-        <!-- 首次使用引导 -->
-        <div class="onboarding-tip" id="onboarding-tip" style="display:none">
-          <span class="tip-icon">👆</span>
-          <span>搜索食物名称，开始记录饮食</span>
-          <span class="tip-dismiss" id="tip-dismiss">×</span>
-        </div>
         <div class="search-box">
           <span class="search-icon">🔍</span>
           <input
@@ -194,16 +188,16 @@
           >
           <button class="search-clear" id="search-clear" style="display:none">✕</button>
         </div>
+        <!-- 快捷入口：始终可见 -->
+        <div class="search-add-custom" id="search-add-custom">
+          <button class="link-btn" id="btn-add-custom">✏️ 自定义添加</button>
+          <span class="search-add-divider">|</span>
+          <button class="link-btn link-btn--ai" id="btn-ai-estimate">🤖 AI 智能估计</button>
+        </div>
         <!-- 搜索结果下拉 -->
         <div class="search-results" id="search-results" style="display:none">
           <div class="search-results-list" id="search-results-list">
             <!-- 动态填充搜索结果 -->
-          </div>
-          <div class="search-add-custom" id="search-add-custom">
-            <span>没找到？</span>
-            <button class="link-btn" id="btn-add-custom">自定义添加</button>
-            <span class="search-add-divider">|</span>
-            <button class="link-btn link-btn--ai" id="btn-ai-estimate">🤖 AI 智能估计</button>
           </div>
         </div>
       </section>

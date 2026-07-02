@@ -394,11 +394,25 @@ async function getRecordSummariesDB() {
 
   try {
     const result = await apiGet('records/summaries', null);
-    return result.summaries || [];
+    // 标准化 D1 返回的字段名，匹配 history.js 期望的 camelCase 格式
+    return normalizeSummaries(result.summaries || []);
   } catch (e) {
     console.warn('D1 unavailable for summaries, using localStorage:', e.message);
     return getAllDaySummariesLocal();
   }
+}
+
+/** 标准化历史汇总字段名（D1 snake_case → 客户端 camelCase） */
+function normalizeSummaries(summaries) {
+  return summaries.map(s => ({
+    date: s.record_date,
+    dateObj: new Date(s.record_date + 'T00:00:00'),
+    totalCal: s.total_cal,
+    totalCarbs: s.total_carbs || 0,
+    totalProtein: s.total_protein || 0,
+    totalFat: s.total_fat || 0,
+    count: s.count,
+  }));
 }
 
 /** 从 localStorage 扫描所有日期的汇总（匿名/离线回退） */
@@ -414,18 +428,19 @@ function getAllDaySummariesLocal() {
         if (records.length > 0) {
           const recordDate = key.replace(prefix, '');
           summaries.push({
-            record_date: recordDate,
+            date: recordDate,
+            dateObj: new Date(recordDate + 'T00:00:00'),
+            totalCal: records.reduce((s, r) => s + (r.calories || 0), 0),
+            totalCarbs: records.reduce((s, r) => s + (r.carbs || 0), 0),
+            totalProtein: records.reduce((s, r) => s + (r.protein || 0), 0),
+            totalFat: records.reduce((s, r) => s + (r.fat || 0), 0),
             count: records.length,
-            total_cal: records.reduce((s, r) => s + (r.calories || 0), 0),
-            total_carbs: records.reduce((s, r) => s + (r.carbs || 0), 0),
-            total_protein: records.reduce((s, r) => s + (r.protein || 0), 0),
-            total_fat: records.reduce((s, r) => s + (r.fat || 0), 0),
           });
         }
       } catch (e) { /* skip corrupted data */ }
     }
   }
-  return summaries.sort((a, b) => b.record_date.localeCompare(a.record_date));
+  return summaries.sort((a, b) => b.date.localeCompare(a.date));
 }
 
 // ═══════════════════════════════════════════════════

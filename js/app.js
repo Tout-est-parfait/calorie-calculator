@@ -45,9 +45,6 @@ async function initApp() {
   await renderDashboard();
   await renderAdvice();
   bindEvents();
-
-  // 首次使用引导：无记录时显示搜索提示
-  await checkOnboarding();
 }
 
 // ==================== 认证界面控制 ====================
@@ -210,22 +207,6 @@ function showToast(message, type) {
       if (toast.parentNode) toast.parentNode.removeChild(toast);
     });
   }, 1800);
-}
-
-/** 首次使用引导：当天无记录时提示搜索 */
-async function checkOnboarding() {
-  const records = await getTodayRecords();
-  const tip = $('onboarding-tip');
-  if (records.length === 0) {
-    tip.style.display = 'flex';
-    // 关闭按钮
-    $('tip-dismiss').addEventListener('click', () => {
-      tip.style.display = 'none';
-    });
-    // 首次添加食物后自动隐藏
-  } else {
-    tip.style.display = 'none';
-  }
 }
 
 // ==================== DOM 引用 ====================
@@ -596,9 +577,6 @@ async function confirmAIEstimate() {
   const confNote = data.confidence === 'low' ? '（仅供参考）' : '';
   showToast('AI 估计：' + record.foodName + ' ' + record.calories + ' kcal' + confNote, 'success');
 
-  // 隐藏首次引导
-  $('onboarding-tip').style.display = 'none';
-
   // 关闭弹窗
   closeAIEstimateModal();
   aiEstimateResult = null;
@@ -698,9 +676,6 @@ async function confirmAddFood() {
   // Toast 反馈
   showToast('已添加：' + record.foodName + ' ' + record.calories + ' kcal', 'success');
 
-  // 隐藏首次引导
-  $('onboarding-tip').style.display = 'none';
-
   // 关闭弹窗并清除搜索
   hideServingModal();
   clearSearch();
@@ -746,10 +721,6 @@ async function removeIntakeRecord(recordId) {
         await renderDashboard();
         await renderAdvice();
         showToast('已删除', 'warning');
-        // 如果列表清空，重新显示引导
-        if (filtered.length === 0) {
-          $('onboarding-tip').style.display = 'flex';
-        }
       }, 230);
       return;
     }

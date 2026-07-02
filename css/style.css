@@ -577,16 +577,16 @@ input {
   justify-content: center;
   flex-wrap: wrap;
   gap: var(--space-xs) var(--space-sm);
-  padding: var(--space-md);
-  border-top: 1px solid var(--border-color);
+  padding: var(--space-md) 0;
   font-size: var(--font-size-sm);
   color: var(--text-secondary);
-  line-height: 1.6;
 }
 
 .search-add-custom .link-btn {
   white-space: nowrap;
   margin: 0 2px;
+  font-size: var(--font-size-md);
+  font-weight: 500;
 }
 
 .search-add-divider {
@@ -2247,33 +2247,6 @@ input {
 
 .toast.toast--warning {
   background: #E65100;
-}
-
-/* 首次使用引导提示 */
-.onboarding-tip {
-  display: flex;
-  align-items: center;
-  gap: var(--space-sm);
-  padding: var(--space-md) var(--space-lg);
-  background: var(--color-primary-light);
-  border-radius: var(--border-radius-md);
-  font-size: var(--font-size-sm);
-  color: var(--color-primary-dark);
-  animation: pulse 0.6s ease 2;
-}
-
-.onboarding-tip .tip-icon {
-  font-size: 20px;
-  flex-shrink: 0;
-}
-
-.onboarding-tip .tip-dismiss {
-  margin-left: auto;
-  font-size: var(--font-size-lg);
-  color: var(--color-primary-dark);
-  cursor: pointer;
-  padding: 0 var(--space-xs);
-  opacity: 0.6;
 }
 
 /* ---------- 滚动条美化 ---------- */

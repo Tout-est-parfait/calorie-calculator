@@ -518,9 +518,10 @@ async function renderMealPlan() {
 
   if (savedPlan) {
     // 有已保存的食谱，直接渲染
+    // loadMealPlan 返回包装对象 { data, savedAt }，需要解包
     emptyEl.style.display = 'none';
     resultEl.style.display = 'block';
-    renderMealPlanResultHTML(resultEl, savedPlan);
+    renderMealPlanResultHTML(resultEl, savedPlan.data || savedPlan);
   } else {
     // 无食谱，显示空状态
     emptyEl.style.display = '';
