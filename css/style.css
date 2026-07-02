@@ -460,6 +460,44 @@ input {
 /* ---------- 搜索区域 ---------- */
 .search-section {
   position: relative;
+  animation: searchSlideIn 0.25s ease-out;
+}
+
+@keyframes searchSlideIn {
+  from { opacity: 0; transform: translateY(-8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.search-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-sm);
+}
+
+.search-section-title {
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.search-section-collapse {
+  width: 28px;
+  height: 28px;
+  border-radius: var(--border-radius-round);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--font-size-sm);
+  color: var(--text-secondary);
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  cursor: pointer;
+  transition: background var(--transition-fast), color var(--transition-fast);
+}
+.search-section-collapse:hover {
+  background: var(--color-danger-light);
+  color: var(--color-danger);
 }
 
 .search-box {

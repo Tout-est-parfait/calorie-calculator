@@ -385,7 +385,7 @@ function showDashboardView() {
   const isToday = isSameDay(state.currentDate, state.today);
 
   $('dashboard').style.display = 'flex';
-  $('search-section').style.display = 'block';
+  // 搜索框默认隐藏，点击餐次"+"才展开
   $('intake-section').style.display = 'flex';
   // AI 建议仅当日可见
   $('advice-section').style.display = isToday ? 'flex' : 'none';
@@ -649,9 +649,7 @@ async function confirmAIEstimate() {
     meal: state.addingToMeal || autoDetectMeal(),
   };
 
-  // 添加完成后重置餐次选择
-  state.addingToMeal = null;
-
+  // 保持餐次目标，方便连续添加（用户可通过提示条"取消"清除）
   await addIntakeRecord(record);
 
   // Toast 反馈
@@ -753,9 +751,7 @@ async function confirmAddFood() {
     meal: state.addingToMeal || autoDetectMeal(),
   };
 
-  // 添加完成后重置餐次选择
-  state.addingToMeal = null;
-
+  // 保持餐次目标，方便连续添加（用户可通过提示条"取消"清除）
   // 添加到当日记录
   await addIntakeRecord(record);
 
@@ -892,8 +888,32 @@ async function renderIntakeList() {
   updateMealSelectorUI();
 }
 
-/** 更新餐次选择提示条的显隐 */
-function updateMealSelectorUI() {
+/** 展开搜索框 */
+function showSearchSection() {
+  const el = $('search-section');
+  if (!el) return;
+  const wasHidden = el.style.display === 'none' || !el.style.display;
+  el.style.display = 'block';
+  if (wasHidden) {
+    // 仅在从隐藏变为可见时播放滑入动画
+    el.style.animation = 'none';
+    el.offsetHeight; // 强制回流
+    el.style.animation = 'searchSlideIn 0.25s ease-out';
+  }
+  setTimeout(() => $('search-input').focus(), 100);
+}
+
+/** 收起搜索框 */
+function hideSearchSection() {
+  const el = $('search-section');
+  if (!el) return;
+  el.style.display = 'none';
+  // 清空搜索状态
+  clearSearch();
+  state.searchQuery = '';
+  $('search-input').value = '';
+  $('search-results').style.display = 'none';
+}
   const selector = $('meal-selector');
   const targetEl = $('meal-selector-target');
   if (!selector || !targetEl) return;
@@ -1038,11 +1058,21 @@ function bindEvents() {
     btn.addEventListener('click', () => {
       state.addingToMeal = btn.dataset.meal;
       updateMealSelectorUI();
-      $('search-input').focus();
+      showSearchSection();
       const cfg = MEAL_CONFIG[state.addingToMeal];
-      showToast('点击食物即可添加到' + (cfg ? cfg.label : ''), 'info');
+      showToast('搜索食物即可添加到' + (cfg ? cfg.label : ''), 'info');
     });
   });
+
+  // 搜索框收起按钮
+  const collapseBtn = $('search-collapse');
+  if (collapseBtn) {
+    collapseBtn.addEventListener('click', () => {
+      state.addingToMeal = null;
+      updateMealSelectorUI();
+      hideSearchSection();
+    });
+  }
 
   // 餐次选择提示条 — 取消按钮
   const mealClearBtn = $('meal-selector-clear');

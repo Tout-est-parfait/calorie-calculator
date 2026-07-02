@@ -175,8 +175,12 @@
         </div>
       </section>
 
-      <!-- 食物搜索栏 -->
-      <section class="search-section" id="search-section">
+      <!-- 食物搜索栏（默认隐藏，点击餐次"+"展开） -->
+      <section class="search-section" id="search-section" style="display:none">
+        <div class="search-section-header">
+          <span class="search-section-title">🔍 搜索食物</span>
+          <button class="search-section-collapse" id="search-collapse" title="收起搜索框">✕</button>
+        </div>
         <!-- 首次使用引导 -->
         <div class="onboarding-tip" id="onboarding-tip" style="display:none">
           <span class="tip-icon">👆</span>
