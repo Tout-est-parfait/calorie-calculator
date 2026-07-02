@@ -775,9 +775,19 @@ input {
   background: var(--color-primary-light);
 }
 
-/* 兼容：保留旧版空状态（全部无记录时） */
+/* 空状态提示（始终显示在餐次区块上方，轻量化） */
 #intake-empty {
-  /* 继承已有 .empty-state 样式 */;
+  padding: var(--space-md) var(--space-lg);
+  background: var(--color-primary-light);
+  border-radius: var(--border-radius-sm);
+  box-shadow: none;
+  margin-bottom: var(--space-sm);
+}
+#intake-empty .empty-icon {
+  font-size: 24px;
+}
+#intake-empty .empty-text {
+  font-size: var(--font-size-sm);
 }
 
 .section-header {

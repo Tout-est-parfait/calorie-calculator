@@ -829,15 +829,8 @@ async function renderIntakeList() {
 
   countEl.textContent = records.length + ' 项';
 
-  // 整体空状态
-  if (records.length === 0) {
-    emptyEl.style.display = 'flex';
-    blocksEl.style.display = 'none';
-    updateMealSelectorUI();
-    return;
-  }
-
-  emptyEl.style.display = 'none';
+  // 始终显示四餐次区块，空状态仅作为轻量提示
+  emptyEl.style.display = (records.length === 0) ? 'flex' : 'none';
   blocksEl.style.display = 'flex';
 
   // 按餐次分组
